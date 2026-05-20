@@ -1,0 +1,7 @@
+# Temporary project artifacts — DBs, screenshots, logs
+_tmp/
+
+# Python virtual environments
+.venv/
+__pycache__/
+*.pyc
