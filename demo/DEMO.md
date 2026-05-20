@@ -104,7 +104,7 @@ Check: `ss -tlnp | grep 51`
 Playwright is launching headless Chromium browsers. On a slow machine this can take >30 s. Wait up to 2 minutes before aborting.
 
 **"No module named gym_env"**
-Run from the project root (`/mnt/d/p/gym`), not from inside `demo/`.
+Run from the project root, not from inside `demo/`.
 
 ---
 

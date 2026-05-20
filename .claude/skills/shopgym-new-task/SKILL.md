@@ -1,6 +1,6 @@
 ---
 name: shopgym-new-task
-description: Add a new task to the ShopGym gym environment in /mnt/d/p/gym. Use this skill whenever the user wants to create a new task, add a new goal for the agent, write a new verifier, or add a scripted oracle for a new task. Trigger even if the user just says "add a task", "make a new task", "I want the agent to do X", or "write an oracle for my new task".
+description: Add a new task to the ShopGym gym environment. Use this skill whenever the user wants to create a new task, add a new goal for the agent, write a new verifier, or add a scripted oracle for a new task. Trigger even if the user just says "add a task", "make a new task", "I want the agent to do X", or "write an oracle for my new task".
 ---
 
 # ShopGym — Adding a New Task
@@ -103,14 +103,26 @@ gym_env/.venv/bin/python demo/run_one.py your_task oracle 0
 
 ### 6. Wire the oracle into `demo/run_one.py` and `demo/parallel_demo.py`
 
-In `demo/run_one.py`, add a branch in `main()`:
-```python
-elif policy == "oracle" and task_name == "your_task":
-    reward, terminated = _run_your_task_oracle(env, obs)
-```
-And add the corresponding traced wrapper `_run_your_task_oracle` (same pattern as the existing three).
+Both runners use dict-based dispatch — no per-task branching needed. Just add your task and oracle to the two maps in each file:
 
-In `demo/parallel_demo.py`, add to `task_map` and the oracle dispatch in `run_env_worker`, and optionally add a config entry to `main()`.
+**`demo/run_one.py`** — inside `main()`, add to both dicts:
+```python
+task_map   = { ..., "your_task": YourTask }
+oracle_map = { ..., "your_task": oracles.run_your_task_oracle }
+```
+
+**`demo/parallel_demo.py`** — inside `run_env_worker()`, add to both dicts:
+```python
+task_map   = { ..., "your_task": YourTask }
+oracle_map = { ..., "your_task": oracles.run_your_task_oracle }
+```
+
+Then optionally add a config entry to `main()` in `parallel_demo.py`:
+```python
+(5, "your_task", 3, "oracle"),
+```
+
+Step logging in `run_one.py` is automatic — it monkey-patches `oracles._step` with a traced version before calling any oracle, so no extra wrapper code is needed.
 
 ### 7. Verify end-to-end
 

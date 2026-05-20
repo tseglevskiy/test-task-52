@@ -1,9 +1,9 @@
 ## Brief overview
-Project-specific conventions for the ShopGym web gym project (`/mnt/d/p/gym`).
+Project-specific conventions for the ShopGym web gym project.
 
 ## Temporary files and directories
 - Never use system temporary directories like `/tmp/` for project artifacts
-- Always use `_tmp/` inside the project root (`/mnt/d/p/gym/_tmp/`) for any temporary files, test databases, screenshots, logs, etc.
+- Always use `_tmp/` inside the project root (`_tmp/`) for any temporary files, test databases, screenshots, logs, etc.
 - Example: Docker DB mounts → `_tmp/gym_1/shop.db`, Playwright screenshots → `_tmp/pw_test_screenshots/`
 - `_tmp/` should be added to `.gitignore`
 

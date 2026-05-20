@@ -79,16 +79,17 @@ def run_env_worker(args):
         from tasks.cancel_order import CancelRecentOrderTask
         from tasks.buy_cheapest import BuyCheapestInCategoryTask
         from tasks.apply_coupon import ApplyCouponWithQuantityTask
-        from demo.oracles import (
-            run_cancel_oracle,
-            run_apply_coupon_oracle,
-            run_buy_cheapest_oracle,
-        )
+        import demo.oracles as oracles
 
         task_map = {
             "cancel_order": CancelRecentOrderTask,
             "buy_cheapest": BuyCheapestInCategoryTask,
             "apply_coupon": ApplyCouponWithQuantityTask,
+        }
+        oracle_map = {
+            "cancel_order": oracles.run_cancel_oracle,
+            "buy_cheapest": oracles.run_buy_cheapest_oracle,
+            "apply_coupon": oracles.run_apply_coupon_oracle,
         }
         task_class = task_map[task_name]
 
@@ -98,11 +99,10 @@ def run_env_worker(args):
         for ep in range(n_episodes):
             obs, info = env.reset(seed=ep)
 
-            if policy_name == "oracle" and task_name == "cancel_order":
-                reward, terminated = run_cancel_oracle(env, obs)
-            elif policy_name == "oracle" and task_name == "apply_coupon":
-                reward, terminated = run_apply_coupon_oracle(env, obs)
-            elif policy_name == "oracle" and task_name == "buy_cheapest":
+            if policy_name == "oracle" and task_name in oracle_map:
+                reward, terminated = oracle_map[task_name](env, obs)
+            else:
+                reward, terminated = _run_random_policy(env)
                 reward, terminated = run_buy_cheapest_oracle(env, obs)
             else:
                 reward, terminated = _run_random_policy(env)

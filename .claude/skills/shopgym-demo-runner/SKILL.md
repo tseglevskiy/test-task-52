@@ -1,11 +1,11 @@
 ---
 name: shopgym-demo-runner
-description: Run ShopGym oracle demos and debug individual task episodes in the /mnt/d/p/gym project. Use this skill whenever the user wants to run the demo, test an oracle, check if a task works, debug a failing episode, run a specific task with a specific seed, or see step-by-step browser logs for any of the three tasks (cancel_order, apply_coupon, buy_cheapest). Trigger even if the user just says "run the demo", "test the oracle", "does cancel_order work?", or "show me what happens when the agent runs buy_cheapest".
+description: Run ShopGym oracle demos and debug individual task episodes. Use this skill whenever the user wants to run the demo, test an oracle, check if a task works, debug a failing episode, run a specific task with a specific seed, or see step-by-step browser logs for any of the three tasks (cancel_order, apply_coupon, buy_cheapest). Trigger even if the user just says "run the demo", "test the oracle", "does cancel_order work?", or "show me what happens when the agent runs buy_cheapest".
 ---
 
 # ShopGym Demo Runner
 
-This skill runs oracle policy demos against the ShopGym gym environment. The project lives at `/mnt/d/p/gym`. All demo code is in `demo/`.
+This skill runs oracle policy demos against the ShopGym gym environment. All demo code is in `demo/`.
 
 ## Project layout (relevant parts)
 

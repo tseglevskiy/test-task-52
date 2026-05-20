@@ -10,7 +10,7 @@ Tests:
      are untouched
 
 Run:
-  cd /mnt/d/p/gym
+  cd shop
   python -m pytest tests/test_seeder.py -v
   # or without pytest:
   python tests/test_seeder.py

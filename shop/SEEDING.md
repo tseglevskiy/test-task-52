@@ -172,7 +172,7 @@ seed_database(db_path, config)
 ## Testing determinism
 
 ```bash
-cd /mnt/d/p/gym/shop
+cd shop
 python tests/test_seeder.py
 ```
 

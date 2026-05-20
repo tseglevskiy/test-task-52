@@ -4,6 +4,16 @@ A minimal web gym: a sandboxed, resettable e-commerce browser environment that a
 
 ---
 
+## TL;DR — Running the demo
+
+The fastest way to run the demo is to **ask Claude Code** — it has a built-in skill that knows exactly how to start it, debug failures, and walk through individual episodes step by step. Just say:
+
+> *"Run the demo"* or *"Test the cancel_order oracle"*
+
+For full details on what the demo does, how to run it manually, and how to interpret the output, see **[`demo/DEMO.md`](demo/DEMO.md)**.
+
+---
+
 ## Repository layout
 
 ```
@@ -12,8 +22,12 @@ gym/
 │   ├── app.py             # All routes + internal API (/api/reset, /api/db-state)
 │   ├── db.py              # SQLite schema
 │   ├── seed.py            # Deterministic DB seeder
+│   ├── vocab.py           # Static product vocabulary (10 categories × 100 products)
 │   ├── templates/         # Jinja2 HTML templates
-│   └── Dockerfile
+│   ├── Dockerfile
+│   ├── README.md          # Route table, data schema, API reference
+│   ├── SEEDING.md         # Seeder design, determinism guarantees, SeedConfig docs
+│   └── DOCKER.md          # How to build, run, seed, and tear down Docker instances
 ├── gym_env/               # Gymnasium environment infrastructure
 │   ├── env.py             # ShopEnv(gymnasium.Env)
 │   ├── actions.py         # JSON action → Playwright call
@@ -21,16 +35,21 @@ gym/
 │   ├── tasks/base.py      # AbstractTask interface
 │   ├── tests/             # Verifier unit tests + integration smoke test
 │   ├── README.md          # Environment API, spaces, design decisions
-│   └── TASK.md            # How to write a new task
+│   └── TASK.md            # How to write a new task (full reference)
 ├── tasks/                 # Concrete task implementations
 │   ├── cancel_order.py
 │   ├── apply_coupon.py
 │   ├── buy_cheapest.py
 │   └── README.md          # What each task does, verifier logic, oracle steps
-├── scripts/
-│   └── parallel_demo.py   # 4 concurrent envs, scripted oracles + random policy
+├── demo/                  # Demo runners and scripted oracle policies
+│   ├── oracles.py         # Oracle functions for all tasks (shared by both runners)
+│   ├── run_one.py         # Single-episode runner with full step-by-step logging
+│   ├── parallel_demo.py   # 4 concurrent envs, scripted oracles + random policy
+│   └── DEMO.md            # How to run the demo, expected output, troubleshooting
+├── .claude/skills/        # Claude Code skills for this project
+│   ├── shopgym-demo-runner/  # Skill: run/debug oracle demos
+│   └── shopgym-new-task/     # Skill: add a new task end-to-end
 ├── docker-compose.yml     # 4 shop instances on ports 5001–5004
-├── DEMO.md                # How to run the parallel demo
 └── README.md              # This file
 ```
 
@@ -54,7 +73,41 @@ Host machine
 
 One container = one Flask process = one SQLite file. Each parallel env instance gets a unique port and a unique DB path. No shared mutable state between instances.
 
+For the demo, Flask runs as lightweight subprocesses (no Docker) for fast local startup (~100 ms vs ~2–5 s for Docker).
+
 For environment API details, observation/action spaces, and reset flow timing, see **[`gym_env/README.md`](gym_env/README.md)**.
+
+---
+
+## Demo
+
+Three tasks are implemented, each with a scripted oracle that achieves 100% success:
+
+| Task | What the agent must do |
+|---|---|
+| `cancel_order` | Navigate to Orders → open the most recent order → cancel it |
+| `apply_coupon` | Find a specific SKU in Electronics → add qty 2 → apply coupon SAVE10 → checkout |
+| `buy_cheapest` | Find the cheapest Electronics item → buy it → ship to 123 Main St, Springfield, IL |
+
+All oracle logic lives in **[`demo/oracles.py`](demo/oracles.py)**. Both runners (`run_one.py` and `parallel_demo.py`) import from it directly — no duplicated code.
+
+`run_one.py` injects a traced `_step` into the oracles module before running, so every action is logged with its resulting URL and reward — no per-oracle wrapper needed.
+
+See **[`demo/DEMO.md`](demo/DEMO.md)** for usage, expected output, and troubleshooting.
+
+---
+
+## Adding a new task
+
+See **[`gym_env/TASK.md`](gym_env/TASK.md)** for the full `AbstractTask` interface and step-by-step instructions. The short version:
+
+1. Write `tasks/your_task.py` (seed requirements + goal string + verifier)
+2. Export it from `tasks/__init__.py`
+3. Add a verifier unit test in `gym_env/tests/test_verifiers.py`
+4. Write `run_your_task_oracle(env, obs)` in `demo/oracles.py`
+5. Add one entry to `task_map` and `oracle_map` in both `demo/run_one.py` and `demo/parallel_demo.py`
+
+Or just ask Claude Code — it has a skill for this too.
 
 ---
 

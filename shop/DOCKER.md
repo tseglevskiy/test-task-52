@@ -25,7 +25,7 @@ The `.dockerignore` excludes `.venv/`, `*.db`, `*.jsonl`, `__pycache__/`, and `t
 ### 2a. Pre-create host files
 
 Docker file bind-mounts require the **host file to exist before `docker run`**.  
-Run from the **project root** (`/mnt/d/p/gym`):
+Run from the **project root**:
 
 ```bash
 mkdir -p _tmp/gym_1
