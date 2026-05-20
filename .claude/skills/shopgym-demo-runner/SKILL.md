@@ -52,13 +52,14 @@ A successful run ends with:
 
 ## Running the full parallel demo
 
-Use `parallel_demo.py` when the user wants to see all four configurations run concurrently and get a summary table.
+Use `parallel_demo.py` when the user wants to see all four configurations run concurrently and get a summary table. It uses Docker — one container per instance — so the image must be built first:
 
 ```bash
+docker build -t shopgym:latest shop/
 gym_env/.venv/bin/python demo/parallel_demo.py
 ```
 
-Expected output (takes ~60–90 s):
+Expected output (takes ~90–120 s including Docker startup):
 ```
 === Parallel Demo Results ===
   Instance 1 | cancel_order   | oracle | 5/5 = 100%
@@ -87,14 +88,17 @@ If a run fails or hangs, check these in order:
 
 1. **Port conflict** — `run_one.py` uses port 5199; `parallel_demo.py` uses 5101–5104.
    Check: `ss -tlnp | grep 51`
+   Leftover containers: `docker rm -f shopgym_demo_1 shopgym_demo_2 shopgym_demo_3 shopgym_demo_4`
 
-2. **Flask didn't start** — look for `"Flask failed to start"` or repeated connection-refused messages in the output. The Flask subprocess logs flow directly to stdout in `run_one.py`.
+2. **"docker run failed" / image not found** — build the image first: `docker build -t shopgym:latest shop/`
 
-3. **Oracle returned FAILURE** — the step log will show which action failed (reward stayed 0.0 all the way through). Common causes:
+3. **Flask didn't start** (`run_one.py` only) — look for `"Flask failed to start"` or repeated connection-refused messages in the output. The Flask subprocess logs flow directly to stdout in `run_one.py`.
+
+4. **Oracle returned FAILURE** — the step log will show which action failed (reward stayed 0.0 all the way through). Common causes:
    - `click_by_role` couldn't find the element — check the axtree snippet printed by `run_one.py`
    - SKU-E7421 not found in axtree for `apply_coupon` — the regex failed; the axtree snippet is printed automatically
 
-4. **Slow startup** — Playwright launches a headless Chromium browser. On a slow machine allow up to 2 minutes.
+5. **Slow startup** — Playwright launches a headless Chromium browser. On a slow machine allow up to 2 minutes.
 
 ## How the oracles work
 

@@ -1,6 +1,10 @@
 # Running the Demo
 
-The demo launches gym instances, runs scripted oracles (and a random policy) against them, and prints success rates. It requires no Docker — Flask runs as lightweight subprocesses.
+The demo launches gym instances, runs scripted oracles (and a random policy) against them, and prints success rates.
+
+Two runners with different backends:
+- **`run_one.py`** — Flask as a subprocess. Fast startup (~100 ms), ideal for debugging a single episode.
+- **`parallel_demo.py`** — one Docker container per instance. True production-like isolation; requires `shopgym:latest` to be built first.
 
 ---
 
@@ -9,12 +13,14 @@ The demo launches gym instances, runs scripted oracles (and a random policy) aga
 | File | Purpose |
 |---|---|
 | `oracles.py` | Scripted oracle policies for all three tasks (shared by both runners) |
-| `run_one.py` | Run **one** task+policy episode with full step-by-step logging |
-| `parallel_demo.py` | Run all 4 configurations in parallel and print a summary table |
+| `run_one.py` | Run **one** task+policy episode with full step-by-step logging (Flask subprocess) |
+| `parallel_demo.py` | Run all 4 configurations in parallel and print a summary table (Docker) |
 
 ---
 
 ## Run a single task (recommended for debugging)
+
+No Docker needed — Flask starts as a subprocess automatically.
 
 ```bash
 # From the project root
@@ -48,11 +54,21 @@ gym_env/.venv/bin/python demo/run_one.py apply_coupon random 0
 
 ## Run the full parallel demo
 
+Requires the Docker image to be built first (one-time):
+
+```bash
+docker build -t shopgym:latest shop/
+```
+
+Then run:
+
 ```bash
 gym_env/.venv/bin/python demo/parallel_demo.py
 ```
 
-Expected output (takes ~60–90 s):
+Each instance gets its own Docker container (`shopgym_demo_1` … `shopgym_demo_4`) on ports 5101–5104, its own SQLite database (`_tmp/demo_<N>/shop.db`), and its own Playwright Chromium browser. Containers are started before episodes and stopped+removed in `finally` — no leftover state between runs.
+
+Expected output (takes ~90–120 s including Docker startup):
 
 ```
 === Parallel Demo Results ===
@@ -61,8 +77,6 @@ Expected output (takes ~60–90 s):
   Instance 3 | apply_coupon   | oracle | 3/3 = 100%
   Instance 4 | buy_cheapest   | oracle | 3/3 = 100%
 ```
-
-Each instance gets its own Flask process (ports 5101–5104), its own SQLite database (`_tmp/demo_<N>/shop.db`), and its own Playwright Chromium browser. No state is shared between instances.
 
 ---
 
@@ -80,7 +94,10 @@ Each instance gets its own Flask process (ports 5101–5104), its own SQLite dat
 ## Prerequisites
 
 ```bash
-# One-time setup (if not already done)
+# Build the Docker image (parallel demo)
+docker build -t shopgym:latest shop/
+
+# One-time Python venv setup
 python -m venv gym_env/.venv
 gym_env/.venv/bin/pip install gymnasium playwright numpy requests Pillow Flask
 gym_env/.venv/bin/playwright install chromium
@@ -96,12 +113,19 @@ gym_env/.venv/bin/python -c "import gymnasium, playwright, numpy, PIL; print('OK
 
 ## Troubleshooting
 
-**"Flask failed to start"**
-Port 5101–5104 (parallel) or 5199 (run_one) already in use.
+**"docker run failed" / "No such image"**
+Build the image first: `docker build -t shopgym:latest shop/`
+
+**"Container health check timed out"**
+Docker may be slow to start on first pull or on a cold machine. Try running `docker run --rm shopgym:latest` manually to check the image works.
+
+**Port already in use**
+`parallel_demo.py` uses ports 5101–5104; `run_one.py` uses 5199.
 Check: `ss -tlnp | grep 51`
+If a previous run left containers behind: `docker rm -f shopgym_demo_1 shopgym_demo_2 shopgym_demo_3 shopgym_demo_4`
 
 **Demo hangs**
-Playwright is launching headless Chromium browsers. On a slow machine this can take >30 s. Wait up to 2 minutes before aborting.
+Playwright is launching headless Chromium browsers. On a slow machine this can take >30 s. Wait up to 3 minutes before aborting.
 
 **"No module named gym_env"**
 Run from the project root, not from inside `demo/`.
@@ -113,3 +137,4 @@ Run from the project root, not from inside `demo/`.
 - **`oracles.py`** — edit the oracle step sequences to experiment with different UI paths
 - **`parallel_demo.py` configs list** — change tasks, episode counts, or swap oracle↔random
 - **Ports** — `run_one.py` uses 5199; `parallel_demo.py` uses `5100 + instance_id` (5101–5104)
+- **Docker image** — change `IMAGE = "shopgym:latest"` in `parallel_demo.py` to use a different tag

@@ -2,20 +2,23 @@
 Parallel gym demo: 4 concurrent ShopEnv instances.
 
 Uses multiprocessing.Pool (spawn context) — one OS process per env.
-Flask runs as subprocesses (no Docker) for fast startup.
+Each env instance gets its own Docker container (shopgym:latest) on a
+unique port with a unique DB file — true production-like isolation.
+
+Prerequisites:
+    docker build -t shopgym:latest shop/
 
 Usage:
     gym_env/.venv/bin/python demo/parallel_demo.py
 
 Expected output:
-    Instance 1 | cancel_order  | oracle | 5/5 = 100%
-    Instance 2 | cancel_order  | random | 0/5 = 0%
-    Instance 3 | apply_coupon  | oracle | 3/3 = 100%
-    Instance 4 | buy_cheapest  | oracle | 3/3 = 100%
+    Instance 1 | cancel_order   | oracle | 5/5 = 100%
+    Instance 2 | cancel_order   | random | 0/5 = 0%
+    Instance 3 | apply_coupon   | oracle | 3/3 = 100%
+    Instance 4 | buy_cheapest   | oracle | 3/3 = 100%
 """
 
 import multiprocessing
-import os
 import subprocess
 import sys
 import time
@@ -25,14 +28,79 @@ import requests
 
 ROOT = Path(__file__).parent.parent
 
+IMAGE = "shopgym:latest"
+
+
+# ---------------------------------------------------------------------------
+# Docker helpers
+# ---------------------------------------------------------------------------
+
+def _start_container(instance_id: int, db_path: Path, jsonl_path: Path, port: int) -> str:
+    """
+    Start a named Docker container for this instance.
+    Returns the container name.
+    Raises RuntimeError if docker run fails.
+    """
+    name = f"shopgym_demo_{instance_id}"
+
+    # Pre-create host files — Docker bind-mount requires them to exist
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.touch(exist_ok=True)
+    jsonl_path.touch(exist_ok=True)
+
+    # Remove any leftover container from a previous run
+    subprocess.run(
+        ["docker", "rm", "-f", name],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+    result = subprocess.run(
+        [
+            "docker", "run", "-d",
+            "--name", name,
+            "-v", f"{db_path.resolve()}:/app/shop.db",
+            "-v", f"{jsonl_path.resolve()}:/app/shop.jsonl",
+            "-p", f"{port}:5000",
+            IMAGE,
+        ],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"docker run failed: {result.stderr.strip()}")
+    return name
+
+
+def _stop_container(name: str) -> None:
+    subprocess.run(["docker", "stop", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["docker", "rm",   name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _wait_for_health(base_url: str, retries: int = 40, delay: float = 0.5) -> bool:
+    for _ in range(retries):
+        try:
+            r = requests.get(f"{base_url}/api/health", timeout=1)
+            if r.json()["status"] == "ok":
+                return True
+        except Exception:
+            pass
+        time.sleep(delay)
+    return False
+
 
 # ---------------------------------------------------------------------------
 # Worker — runs in a child process
 # ---------------------------------------------------------------------------
 
+def _log(instance_id: int, msg: str) -> None:
+    """Print a timestamped progress line for this instance (visible during the run)."""
+    import time as _time
+    ts = _time.strftime("%H:%M:%S")
+    print(f"  [{ts}] instance {instance_id}: {msg}", flush=True)
+
+
 def run_env_worker(args):
     """
-    Runs in a child process. Starts Flask, runs episodes, returns results.
+    Runs in a child process. Starts a Docker container, runs episodes, returns results.
 
     Args:
         args: (instance_id, task_name, n_episodes, policy_name)
@@ -43,37 +111,24 @@ def run_env_worker(args):
     instance_id, task_name, n_episodes, policy_name = args
 
     port = 5100 + instance_id
-    db_path = ROOT / "_tmp" / f"demo_{instance_id}" / "shop.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    db_path.touch(exist_ok=True)
+    db_path    = ROOT / "_tmp" / f"demo_{instance_id}" / "shop.db"
+    jsonl_path = ROOT / "_tmp" / f"demo_{instance_id}" / "shop.jsonl"
+    base_url   = f"http://localhost:{port}"
 
-    flask_cmd = (
-        "import os, sys; sys.path.insert(0, os.getcwd()); "
-        "from app import create_app; "
-        f"create_app(os.environ['DATABASE_PATH']).run("
-        f"host='0.0.0.0', port={port}, debug=False, use_reloader=False)"
-    )
-    flask_proc = subprocess.Popen(
-        [sys.executable, "-c", flask_cmd],
-        cwd=ROOT / "shop",
-        env={**os.environ, "DATABASE_PATH": str(db_path)},
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    base_url = f"http://localhost:{port}"
-    for _ in range(30):
-        try:
-            r = requests.get(f"{base_url}/api/health", timeout=1)
-            if r.json()["status"] == "ok":
-                break
-        except Exception:
-            time.sleep(0.3)
-    else:
-        flask_proc.kill()
-        return {"instance": instance_id, "error": "Flask failed to start"}
+    _log(instance_id, f"starting container on port {port} ...")
+    try:
+        container_name = _start_container(instance_id, db_path, jsonl_path, port)
+    except RuntimeError as e:
+        _log(instance_id, f"ERROR: {e}")
+        return {"instance": instance_id, "error": str(e)}
 
     try:
+        _log(instance_id, "waiting for health check ...")
+        if not _wait_for_health(base_url):
+            _log(instance_id, "ERROR: health check timed out")
+            return {"instance": instance_id, "error": "Container health check timed out"}
+        _log(instance_id, "container ready")
+
         sys.path.insert(0, str(ROOT))
         from gym_env.env import ShopEnv
         from tasks.cancel_order import CancelRecentOrderTask
@@ -97,20 +152,21 @@ def run_env_worker(args):
 
         successes = 0
         for ep in range(n_episodes):
+            _log(instance_id, f"episode {ep + 1}/{n_episodes} ({task_name}, {policy_name}) ...")
             obs, info = env.reset(seed=ep)
 
             if policy_name == "oracle" and task_name in oracle_map:
                 reward, terminated = oracle_map[task_name](env, obs)
             else:
                 reward, terminated = _run_random_policy(env)
-                reward, terminated = run_buy_cheapest_oracle(env, obs)
-            else:
-                reward, terminated = _run_random_policy(env)
 
+            result_str = "✓" if (terminated and reward > 0) else "✗"
+            _log(instance_id, f"episode {ep + 1}/{n_episodes} done — reward={reward} {result_str}")
             if terminated and reward > 0:
                 successes += 1
 
         env.close()
+        _log(instance_id, f"done — {successes}/{n_episodes} successes, stopping container ...")
         return {
             "instance": instance_id,
             "task": task_name,
@@ -120,7 +176,7 @@ def run_env_worker(args):
             "success_rate": successes / n_episodes,
         }
     finally:
-        flask_proc.kill()
+        _stop_container(container_name)
 
 
 def _run_random_policy(env, max_steps: int = 20):
