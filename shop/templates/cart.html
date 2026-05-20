@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Cart – ShopGym{% endblock %}
+
+{% block content %}
+<h1>Your Cart</h1>
+
+{% if cart.line_items %}
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr>
+      <th>Product</th>
+      <th>SKU</th>
+      <th>Unit Price</th>
+      <th>Quantity</th>
+      <th>Line Total</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in cart.line_items %}
+    <tr>
+      <td><a href="/product/{{ item.product_id }}">{{ item.name }}</a></td>
+      <td>{{ item.sku }}</td>
+      <td>${{ "%.2f" | format(item.unit_price) }}</td>
+      <td>
+        <form method="POST" action="/cart/update" style="display:inline">
+          <input type="hidden" name="product_id" value="{{ item.product_id }}">
+          <input type="number" name="quantity" value="{{ item.quantity }}" min="0" max="99" style="width:50px">
+          <button type="submit">Update</button>
+        </form>
+      </td>
+      <td>${{ "%.2f" | format(item.unit_price * item.quantity) }}</td>
+      <td>
+        <form method="POST" action="/cart/remove" style="display:inline">
+          <input type="hidden" name="product_id" value="{{ item.product_id }}">
+          <button type="submit">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<hr>
+
+<p><strong>Subtotal:</strong> ${{ "%.2f" | format(cart.subtotal) }}</p>
+
+{% if cart.coupon_code %}
+  <p>
+    <strong>Coupon applied:</strong> {{ cart.coupon_code }}
+    ({{ cart.discount_pct | int }}% off)
+    — <em>–${{ "%.2f" | format(cart.discount_amount) }}</em>
+  </p>
+  <p><strong>Total:</strong> ${{ "%.2f" | format(cart.total) }}</p>
+  <form method="POST" action="/cart/coupon">
+    <input type="hidden" name="code" value="">
+    <button type="submit">Remove Coupon</button>
+  </form>
+{% else %}
+  <p><strong>Total:</strong> ${{ "%.2f" | format(cart.total) }}</p>
+  <form method="POST" action="/cart/coupon">
+    <label for="code">Coupon code:</label>
+    <input type="text" id="code" name="code" placeholder="e.g. SAVE10">
+    <button type="submit">Apply Coupon</button>
+  </form>
+  {% if coupon_error %}
+    <p><strong>Error:</strong> {{ coupon_error }}</p>
+  {% endif %}
+{% endif %}
+
+<hr>
+
+<p>
+  <a href="/checkout"><button>Proceed to Checkout</button></a>
+  &nbsp;
+  <a href="/">Continue Shopping</a>
+</p>
+
+{% else %}
+<p>Your cart is empty. <a href="/">Start shopping</a>.</p>
+{% endif %}
+
+{% endblock %}

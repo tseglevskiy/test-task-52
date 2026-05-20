@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ShopGym{% endblock %}</title>
+</head>
+<body>
+
+<header>
+  <div>
+    <strong><a href="/">ShopGym</a></strong>
+    &nbsp;|&nbsp;
+    {% set active_cat = request.args.get('category', '') %}
+    <a href="/">{% if not active_cat %}<strong>All</strong>{% else %}All{% endif %}</a>
+    {% for cat in categories %}
+      &nbsp;|&nbsp;
+      {% if cat == active_cat %}
+        <strong>{{ cat }}</strong>
+      {% else %}
+        <a href="/?category={{ cat | urlencode }}">{{ cat }}</a>
+      {% endif %}
+    {% endfor %}
+    &nbsp;|&nbsp;
+    <a href="/cart"><strong>Cart ({{ cart_count }})</strong></a>
+    &nbsp;|&nbsp;
+    <a href="/orders">My Orders</a>
+  </div>
+</header>
+
+<hr>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <p><strong>{{ message }}</strong></p>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+{% block content %}{% endblock %}
+
+</body>
+</html>

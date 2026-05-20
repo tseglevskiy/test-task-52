@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order.id[:8] }}… – ShopGym{% endblock %}
+
+{% block content %}
+
+{% if confirmed %}
+  <p style="border:2px solid green; padding:8px;"><strong>✓ Order placed!</strong> Thank you for your purchase. Your order ID is <code>{{ order.id }}</code>.</p>
+{% endif %}
+
+<h1>Order Detail</h1>
+
+<p>
+  <strong>Order ID:</strong> <code>{{ order.id }}</code><br>
+  <strong>Date:</strong> {{ order.date_str }}<br>
+  <strong>Status:</strong>
+  {% if order.status == 'placed' %}
+    <span style="color:green"><strong>Placed</strong></span>
+  {% elif order.status == 'cancelled' %}
+    <span style="color:grey"><strong>Cancelled</strong></span>
+  {% else %}
+    {{ order.status }}
+  {% endif %}
+</p>
+
+<h2>Items</h2>
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.name }}</td>
+      <td>{{ item.sku }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>${{ "%.2f" | format(item.unit_price) }}</td>
+      <td>${{ "%.2f" | format(item.unit_price * item.quantity) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p><strong>Subtotal:</strong> ${{ "%.2f" | format(order.subtotal) }}</p>
+{% if order.coupon_code %}
+  <p><strong>Discount ({{ order.coupon_code }}, {{ order.discount_pct | int }}%):</strong> –${{ "%.2f" | format(order.subtotal - order.total) }}</p>
+{% endif %}
+<p><strong>Total:</strong> ${{ "%.2f" | format(order.total) }}</p>
+
+<h2>Shipping Address</h2>
+<pre>{{ order.shipping_address }}</pre>
+
+{% if order.status == 'placed' %}
+  <form method="POST" action="/orders/{{ order.id }}/cancel">
+    <button type="submit">Cancel Order</button>
+  </form>
+{% endif %}
+
+<p><a href="/orders">Back to My Orders</a> &nbsp; <a href="/">Continue Shopping</a></p>
+
+{% endblock %}

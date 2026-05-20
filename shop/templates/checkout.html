@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Checkout – ShopGym{% endblock %}
+
+{% block content %}
+<h1>Checkout</h1>
+
+<form method="POST" action="/checkout">
+
+  <h2>Shipping Address</h2>
+
+  <p>
+    <label for="name">Full Name *</label><br>
+    <input type="text" id="name" name="name" value="{{ form.name }}" required>
+    {% if errors.name %}<span style="color:red"> {{ errors.name }}</span>{% endif %}
+  </p>
+
+  <p>
+    <label for="street">Street Address *</label><br>
+    <input type="text" id="street" name="street" value="{{ form.street }}" required>
+    {% if errors.street %}<span style="color:red"> {{ errors.street }}</span>{% endif %}
+  </p>
+
+  <p>
+    <label for="city">City *</label><br>
+    <input type="text" id="city" name="city" value="{{ form.city }}" required>
+    {% if errors.city %}<span style="color:red"> {{ errors.city }}</span>{% endif %}
+  </p>
+
+  <p>
+    <label for="state">State *</label><br>
+    <select id="state" name="state" required>
+      <option value="">-- Select State --</option>
+      {% for abbr, fullname in us_states %}
+        <option value="{{ abbr }}" {% if form.state == abbr %}selected{% endif %}>{{ abbr }} – {{ fullname }}</option>
+      {% endfor %}
+    </select>
+    {% if errors.state %}<span style="color:red"> {{ errors.state }}</span>{% endif %}
+  </p>
+
+  <p>
+    <label for="zip">ZIP Code *</label><br>
+    <input type="text" id="zip" name="zip" value="{{ form.zip }}" placeholder="12345" maxlength="5" required>
+    {% if errors.zip %}<span style="color:red"> {{ errors.zip }}</span>{% endif %}
+  </p>
+
+  <hr>
+
+  <h2>Order Summary</h2>
+  <table border="1" cellpadding="6">
+    <thead>
+      <tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr>
+    </thead>
+    <tbody>
+      {% for item in cart.line_items %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.quantity }}</td>
+        <td>${{ "%.2f" | format(item.unit_price) }}</td>
+        <td>${{ "%.2f" | format(item.unit_price * item.quantity) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p><strong>Subtotal:</strong> ${{ "%.2f" | format(cart.subtotal) }}</p>
+  {% if cart.coupon_code %}
+    <p><strong>Discount ({{ cart.coupon_code }}, {{ cart.discount_pct | int }}%):</strong> –${{ "%.2f" | format(cart.discount_amount) }}</p>
+  {% endif %}
+  <p><strong>Total:</strong> ${{ "%.2f" | format(cart.total) }}</p>
+
+  <p>
+    <button type="submit">Place Order</button>
+    &nbsp;
+    <a href="/cart">Back to Cart</a>
+  </p>
+
+</form>
+{% endblock %}

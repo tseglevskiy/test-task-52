@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} – ShopGym{% endblock %}
+
+{% block content %}
+<p>
+  <a href="/">Home</a> &gt;
+  <a href="/?category={{ product.category | urlencode }}">{{ product.category }}</a> &gt;
+  {{ product.name }}
+</p>
+
+<h1>{{ product.name }}</h1>
+<p><strong>SKU:</strong> {{ product.sku }}</p>
+<p><strong>Category:</strong> <a href="/?category={{ product.category | urlencode }}">{{ product.category }}</a></p>
+<p><strong>Price:</strong> ${{ "%.2f" | format(product.price) }}</p>
+<p>{{ product.description }}</p>
+
+<form method="POST" action="/cart/add">
+  <input type="hidden" name="product_id" value="{{ product.id }}">
+  <label for="quantity">Quantity:</label>
+  <input type="number" id="quantity" name="quantity" value="1" min="1" max="99">
+  <button type="submit">Add to Cart</button>
+</form>
+
+{% if related %}
+<hr>
+<h3>Related Products</h3>
+<ul>
+  {% for r in related %}
+  <li>
+    <a href="/product/{{ r.id }}">{{ r.name }}</a>
+    — ${{ "%.2f" | format(r.price) }}
+    <em>({{ r.category }})</em>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p><a href="/">Continue Shopping</a></p>
+{% endblock %}

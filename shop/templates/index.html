@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{% if active_category %}{{ active_category }} – {% endif %}Products – ShopGym{% endblock %}
+
+{% block content %}
+<h1>
+  {% if active_category %}
+    {{ active_category }} Products
+    &nbsp;<small><a href="/?sort={{ sort }}&q={{ q | urlencode }}">[All Products]</a></small>
+  {% elif q %}
+    Search results for "{{ q }}"
+    &nbsp;<small><a href="/">[Clear]</a></small>
+  {% else %}
+    All Products
+  {% endif %}
+</h1>
+
+<form method="GET" action="/">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search products…">
+  {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <button type="submit">Search</button>
+</form>
+
+<p>
+  <strong>Category:</strong>
+  {% if active_category %}
+    <a href="/?sort={{ sort }}&q={{ q | urlencode }}">All</a>
+  {% else %}
+    <strong>All</strong>
+  {% endif %}
+  {% for cat in categories %}
+    &nbsp;|&nbsp;
+    {% if cat == active_category %}
+      <strong>{{ cat }}</strong>
+    {% else %}
+      <a href="/?category={{ cat | urlencode }}&sort={{ sort }}&q={{ q | urlencode }}">{{ cat }}</a>
+    {% endif %}
+  {% endfor %}
+</p>
+
+<p>
+  <strong>Sort:</strong>
+  {% if sort == 'default' %}<strong>Default</strong>{% else %}<a href="?category={{ active_category | urlencode }}&q={{ q | urlencode }}&sort=default">Default</a>{% endif %}
+  &nbsp;|&nbsp;
+  {% if sort == 'price_asc' %}<strong>Price: Low→High</strong>{% else %}<a href="?category={{ active_category | urlencode }}&q={{ q | urlencode }}&sort=price_asc">Price: Low→High</a>{% endif %}
+  &nbsp;|&nbsp;
+  {% if sort == 'price_desc' %}<strong>Price: High→Low</strong>{% else %}<a href="?category={{ active_category | urlencode }}&q={{ q | urlencode }}&sort=price_desc">Price: High→Low</a>{% endif %}
+</p>
+
+<p>
+  Showing {{ products | length }} of {{ total_products }} product{{ 's' if total_products != 1 }}
+  {% if active_category %} in <strong>{{ active_category }}</strong>{% endif %}
+  {% if q %} matching "<strong>{{ q }}</strong>"{% endif %}
+</p>
+
+{% if products %}
+<table border="1" cellpadding="6">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Category</th>
+      <th>SKU</th>
+      <th>Price</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in products %}
+    <tr>
+      <td><a href="/product/{{ p.id }}">{{ p.name }}</a></td>
+      <td><a href="/?category={{ p.category | urlencode }}">{{ p.category }}</a></td>
+      <td>{{ p.sku }}</td>
+      <td>${{ "%.2f" | format(p.price) }}</td>
+      <td><a href="/product/{{ p.id }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No products found.</p>
+{% endif %}
+
+{% if total_pages > 1 %}
+<p>
+  Page {{ page }} of {{ total_pages }}
+  {% if page > 1 %}
+    &nbsp;<a href="?category={{ active_category | urlencode }}&q={{ q | urlencode }}&sort={{ sort }}&page={{ page - 1 }}">← Previous</a>
+  {% endif %}
+  {% if page < total_pages %}
+    &nbsp;<a href="?category={{ active_category | urlencode }}&q={{ q | urlencode }}&sort={{ sort }}&page={{ page + 1 }}">Next →</a>
+  {% endif %}
+</p>
+{% endif %}
+
+{% endblock %}

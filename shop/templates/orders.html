@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}My Orders – ShopGym{% endblock %}
+
+{% block content %}
+<h1>My Orders</h1>
+
+{% if orders %}
+<table border="1" cellpadding="6">
+  <thead>
+    <tr>
+      <th>Order ID</th>
+      <th>Date</th>
+      <th>Status</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in orders %}
+    <tr>
+      <td><code>{{ o.id[:8] }}…</code></td>
+      <td>{{ o.date_str }}</td>
+      <td>
+        {% if o.status == 'placed' %}
+          <span style="color:green">Placed</span>
+        {% elif o.status == 'cancelled' %}
+          <span style="color:grey">Cancelled</span>
+        {% else %}
+          {{ o.status }}
+        {% endif %}
+      </td>
+      <td>${{ "%.2f" | format(o.total) }}</td>
+      <td><a href="/order/{{ o.id }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No orders yet. <a href="/">Start shopping</a>.</p>
+{% endif %}
+
+<p><a href="/">Continue Shopping</a></p>
+{% endblock %}

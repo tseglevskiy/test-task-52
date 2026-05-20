@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# SQLite databases and WAL mode side-files
+*.db
+*.db-shm
+*.db-wal
+
+# Event logs written by the shop at runtime
+*.jsonl
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# nohup output when running in background
+nohup.out
