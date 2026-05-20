@@ -56,8 +56,10 @@ def execute_action(page: Page, action: str) -> None:
         # Click an element identified by its ARIA role and accessible name.
         # Maps directly to what the axtree exposes — agents can read the axtree
         # and emit this action without needing pixel coordinates.
+        # Uses .first to avoid strict-mode violations when multiple elements
+        # share the same role+name (e.g. multiple "View" links in a table).
         # Example: {"type": "click_by_role", "role": "button", "name": "Cancel Order"}
-        page.get_by_role(act["role"], name=act["name"]).click()
+        page.get_by_role(act["role"], name=act["name"]).first.click()
         page.wait_for_load_state("networkidle")
 
     elif t == "press":
