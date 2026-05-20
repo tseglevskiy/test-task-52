@@ -25,19 +25,21 @@ The `.dockerignore` excludes `.venv/`, `*.db`, `*.jsonl`, `__pycache__/`, and `t
 ### 2a. Pre-create host files
 
 Docker file bind-mounts require the **host file to exist before `docker run`**.  
-Create empty placeholder files:
+Run from the **project root** (`/mnt/d/p/gym`):
 
 ```bash
-mkdir -p /tmp/gym_1
-touch /tmp/gym_1/shop.db /tmp/gym_1/shop.jsonl
+mkdir -p _tmp/gym_1
+touch _tmp/gym_1/shop.db _tmp/gym_1/shop.jsonl
 ```
 
 ### 2b. Start the container
 
+Run from the **project root** so that `$(pwd)` expands to the correct absolute path:
+
 ```bash
 docker run -d --name shopgym_1 \
-  -v /tmp/gym_1/shop.db:/app/shop.db \
-  -v /tmp/gym_1/shop.jsonl:/app/shop.jsonl \
+  -v $(pwd)/_tmp/gym_1/shop.db:/app/shop.db \
+  -v $(pwd)/_tmp/gym_1/shop.jsonl:/app/shop.jsonl \
   -p 5001:5000 \
   shopgym:latest
 ```
@@ -46,8 +48,8 @@ docker run -d --name shopgym_1 \
 |------|---------|
 | `-d` | Run in background (detached) |
 | `--name shopgym_1` | Container name for easy reference |
-| `-v /tmp/gym_1/shop.db:/app/shop.db` | Bind-mount the SQLite DB file |
-| `-v /tmp/gym_1/shop.jsonl:/app/shop.jsonl` | Bind-mount the JSONL event log |
+| `-v $(pwd)/_tmp/gym_1/shop.db:/app/shop.db` | Bind-mount the SQLite DB file |
+| `-v $(pwd)/_tmp/gym_1/shop.jsonl:/app/shop.jsonl` | Bind-mount the JSONL event log |
 | `-p 5001:5000` | Map host port 5001 → container port 5000 |
 
 ### 2c. Verify it's up
@@ -143,22 +145,22 @@ docker stop shopgym_1
 docker rm shopgym_1
 ```
 
-The SQLite DB persists on the host at `/tmp/gym_1/shop.db` even after the container is removed.
+The SQLite DB persists on the host at `_tmp/gym_1/shop.db` (inside the project root) even after the container is removed.
 
 ---
 
 ## 7. Multiple Parallel Instances
 
-Each gym instance gets its own container, host port, and DB path. Example — 4 instances:
+Each gym instance gets its own container, host port, and DB path. Run from the **project root**. Example — 4 instances:
 
 ```bash
 for i in 1 2 3 4; do
-  mkdir -p /tmp/gym_$i
-  touch /tmp/gym_$i/shop.db /tmp/gym_$i/shop.jsonl
+  mkdir -p _tmp/gym_$i
+  touch _tmp/gym_$i/shop.db _tmp/gym_$i/shop.jsonl
 
   docker run -d --name shopgym_$i \
-    -v /tmp/gym_$i/shop.db:/app/shop.db \
-    -v /tmp/gym_$i/shop.jsonl:/app/shop.jsonl \
+    -v $(pwd)/_tmp/gym_$i/shop.db:/app/shop.db \
+    -v $(pwd)/_tmp/gym_$i/shop.jsonl:/app/shop.jsonl \
     -p $((5000 + i)):5000 \
     shopgym:latest
 done

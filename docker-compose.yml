@@ -1,0 +1,38 @@
+version: "3.8"
+
+x-shop-defaults: &shop-defaults
+  image: shopgym:latest
+  restart: "no"
+
+services:
+  shop_1:
+    <<: *shop-defaults
+    container_name: shopgym_1
+    ports: ["5001:5000"]
+    volumes:
+      - ./_tmp/gym_1/shop.db:/app/shop.db
+      - ./_tmp/gym_1/shop.jsonl:/app/shop.jsonl
+
+  shop_2:
+    <<: *shop-defaults
+    container_name: shopgym_2
+    ports: ["5002:5000"]
+    volumes:
+      - ./_tmp/gym_2/shop.db:/app/shop.db
+      - ./_tmp/gym_2/shop.jsonl:/app/shop.jsonl
+
+  shop_3:
+    <<: *shop-defaults
+    container_name: shopgym_3
+    ports: ["5003:5000"]
+    volumes:
+      - ./_tmp/gym_3/shop.db:/app/shop.db
+      - ./_tmp/gym_3/shop.jsonl:/app/shop.jsonl
+
+  shop_4:
+    <<: *shop-defaults
+    container_name: shopgym_4
+    ports: ["5004:5000"]
+    volumes:
+      - ./_tmp/gym_4/shop.db:/app/shop.db
+      - ./_tmp/gym_4/shop.jsonl:/app/shop.jsonl
