@@ -13,7 +13,7 @@ Verifier checks:
 
 import requests
 
-from gym_env.tasks.base import AbstractTask
+from tasks.base import AbstractTask
 
 
 class BuyCheapestInCategoryTask(AbstractTask):
@@ -24,7 +24,7 @@ class BuyCheapestInCategoryTask(AbstractTask):
         # with default n_categories=5. No extra requirements needed.
         return {}
 
-    def setup(self, page, base_url: str) -> str:
+    def setup(self, base_url: str) -> str:
         state = requests.get(f"{base_url}/api/db-state").json()
 
         # Record all existing order IDs so verify() can detect new ones.
@@ -40,24 +40,26 @@ class BuyCheapestInCategoryTask(AbstractTask):
             "ship it to 123 Main St, Springfield, IL 62701."
         )
 
-    def verify(self, base_url: str, page) -> tuple[float, bool]:
+    def verify(self, base_url: str) -> dict:
         state = requests.get(f"{base_url}/api/db-state").json()
         new_orders = [o for o in state["orders"] if o["id"] not in self._pre_order_ids]
 
         if not new_orders:
-            return 0.0, False
+            return {
+                "passed": False,
+                "order_id": None,
+                "price_ok": False,
+                "address_ok": False,
+            }
 
-        order = new_orders[0]  # take the first new order
+        order = new_orders[0]
         items = [i for i in state["order_items"] if i["order_id"] == order["id"]]
 
         # Build a lookup from product_id → category for cross-referencing order items.
-        # Needed because order_items stores product_id but not category directly.
         product_category = {p["id"]: p["category"] for p in state["products"]}
 
         # Check that the purchased item is from Electronics AND has the minimum price.
-        # Both conditions are required: an agent that buys the cheapest product across
-        # ALL categories (which might be cheaper than any Electronics item) must not pass.
-        price_and_category_ok = any(
+        price_ok = any(
             abs(i["unit_price"] - self._min_price) < 0.01
             and product_category.get(i["product_id"]) == "Electronics"
             for i in items
@@ -73,6 +75,10 @@ class BuyCheapestInCategoryTask(AbstractTask):
             "62701" in addr,
         ])
 
-        if price_and_category_ok and address_ok:
-            return 1.0, True
-        return 0.0, False
+        passed = price_ok and address_ok
+        return {
+            "passed": passed,
+            "order_id": order["id"],
+            "price_ok": price_ok,
+            "address_ok": address_ok,
+        }

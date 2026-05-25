@@ -61,7 +61,7 @@
   <p><strong>Total:</strong> ${{ "%.2f" | format(cart.total) }}</p>
   <form method="POST" action="/cart/coupon">
     <label for="code">Coupon code:</label>
-    <input type="text" id="code" name="code" placeholder="e.g. SAVE10">
+    <input type="text" id="code" name="code" placeholder="Enter coupon code">
     <button type="submit">Apply Coupon</button>
   </form>
   {% if coupon_error %}

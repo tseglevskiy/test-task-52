@@ -1,16 +1,37 @@
-# ShopGym — Web Gym for RL Agents
+# ShopGym — Agent Evaluation Harness
 
-A minimal web gym: a sandboxed, resettable e-commerce browser environment that an RL trainer can drive to teach a policy how to click, type, and navigate. Customers (AI labs, applied teams) spin up many parallel instances and run rollouts against it.
+A sandboxed, resettable e-commerce environment for evaluating real agents
+(Claude Code) on browser tasks. The agent interacts with the shop exclusively
+through MCP browser tools; every action is recorded; outcomes are validated
+by deterministic verifiers.
 
 ---
 
-## TL;DR — Running the demo
+## TL;DR — Running an evaluation
 
-The fastest way to run the demo is to **ask Claude Code** — it has a built-in skill that knows exactly how to start it, debug failures, and walk through individual episodes step by step. Just say:
+```bash
+# Setup (once)
+python -m venv agent_eval/.venv
+agent_eval/.venv/bin/pip install -r agent_eval/requirements.txt
+agent_eval/.venv/bin/playwright install chromium
 
-> *"Run the demo"* or *"Test the cancel_order oracle"*
+# Quick demo scripts (uses 'claude' from PATH, or pass path as first arg)
+chmod +x demo/*.sh
+./demo/run_cancel_order.sh
+./demo/run_apply_coupon.sh
+./demo/run_buy_cheapest.sh
 
-For full details on what the demo does, how to run it manually, and how to interpret the output, see **[`demo/DEMO.md`](demo/DEMO.md)**.
+# Or call task_runner.py directly
+agent_eval/.venv/bin/python agent_eval/task_runner.py \
+    --task cancel_order \
+    --seed 0 \
+    --claude /path/to/claude
+```
+
+Claude runs headless by default. Artifacts land in `_tmp/runs/{session_id}/`.
+
+For step-by-step setup and task descriptions see **[`demo/README.md`](demo/README.md)**.  
+For full harness details see **[`agent_eval/README.md`](agent_eval/README.md)**.
 
 ---
 
@@ -18,39 +39,44 @@ For full details on what the demo does, how to run it manually, and how to inter
 
 ```
 gym/
-├── shop/                  # The e-commerce Flask app (complete, do not modify)
-│   ├── app.py             # All routes + internal API (/api/reset, /api/db-state)
-│   ├── db.py              # SQLite schema
-│   ├── seed.py            # Deterministic DB seeder
-│   ├── vocab.py           # Static product vocabulary (10 categories × 100 products)
-│   ├── templates/         # Jinja2 HTML templates
+├── shop/                      # The e-commerce Flask app (do not modify)
+│   ├── app.py                 # All routes + /api/reset + /api/db-state
+│   ├── db.py                  # SQLite schema
+│   ├── seed.py                # Deterministic DB seeder
+│   ├── vocab.py               # Static product vocabulary
+│   ├── templates/             # Jinja2 HTML templates
 │   ├── Dockerfile
-│   ├── README.md          # Route table, data schema, API reference
-│   ├── SEEDING.md         # Seeder design, determinism guarantees, SeedConfig docs
-│   └── DOCKER.md          # How to build, run, seed, and tear down Docker instances
-├── gym_env/               # Gymnasium environment infrastructure
-│   ├── env.py             # ShopEnv(gymnasium.Env)
-│   ├── actions.py         # JSON action → Playwright call
-│   ├── observation.py     # Page snapshot → obs dict
-│   ├── tasks/base.py      # AbstractTask interface
-│   ├── tests/             # Verifier unit tests + integration smoke test
-│   ├── README.md          # Environment API, spaces, design decisions
-│   └── TASK.md            # How to write a new task (full reference)
-├── tasks/                 # Concrete task implementations
-│   ├── cancel_order.py
-│   ├── apply_coupon.py
-│   ├── buy_cheapest.py
-│   └── README.md          # What each task does, verifier logic, oracle steps
-├── demo/                  # Demo runners and scripted oracle policies
-│   ├── oracles.py         # Oracle functions for all tasks (shared by both runners)
-│   ├── run_one.py         # Single-episode runner with full step-by-step logging
-│   ├── parallel_demo.py   # 4 concurrent envs, scripted oracles + random policy
-│   └── DEMO.md            # How to run the demo, expected output, troubleshooting
-├── .claude/skills/        # Claude Code skills for this project
-│   ├── shopgym-demo-runner/  # Skill: run/debug oracle demos
-│   └── shopgym-new-task/     # Skill: add a new task end-to-end
-├── docker-compose.yml     # 4 shop instances on ports 5001–5004
-└── README.md              # This file
+│   ├── README.md              # Route table, data schema, API reference
+│   ├── SEEDING.md             # Seeder design and determinism guarantees
+│   └── DOCKER.md              # How to build, run, and tear down Docker instances
+├── tasks/                     # Concrete task implementations + verifier tests
+│   ├── base.py                # AbstractTask interface
+│   ├── cancel_order.py        # CancelRecentOrderTask
+│   ├── apply_coupon.py        # ApplyCouponWithQuantityTask
+│   ├── buy_cheapest.py        # BuyCheapestInCategoryTask
+│   └── tests/
+│       └── test_verifiers.py  # Unit tests for task verifiers (no Docker needed)
+├── agent_eval/                # Agent evaluation harness
+│   ├── mcp_server.py          # FastMCP browser server: tools + trajectory logging
+│   ├── mcp_socket_server.py   # Unix-socket listener wrapping mcp_server.py
+│   ├── mcp_proxy.py           # stdio↔socket relay (copied into Claude's clean cwd)
+│   ├── task_runner.py         # CLI orchestrator: Flask → reset → Claude → verify
+│   ├── trajectory.py          # TrajectoryWriter: JSONL + human-readable .txt
+│   ├── validators/
+│   │   ├── base.py            # AbstractTrajectoryValidator interface
+│   │   └── stub.py            # StubValidator — always passes (placeholder)
+│   ├── requirements.txt
+│   └── README.md              # Full usage docs, artifact layout, how to add a validator
+├── demo/                      # Ready-to-run demo scripts (start here)
+│   ├── run_cancel_order.sh    # Run the cancel_order task
+│   ├── run_apply_coupon.sh    # Run the apply_coupon task
+│   ├── run_buy_cheapest.sh    # Run the buy_cheapest task
+│   └── README.md              # Full setup + usage guide (start here)
+├── docker-compose.yml         # 4 shop instances on ports 5001-5004
+├── TASK.md                    # Original task specification
+├── TASK2.md                   # TASK2 specification (this implementation)
+├── CLAUDE_ISOLATION.md        # Isolation architecture: why and how Claude is sandboxed
+└── CLAUDE_PLUMBING.md         # Original wiring design notes
 ```
 
 ---
@@ -58,132 +84,128 @@ gym/
 ## Architecture
 
 ```
-Host machine
-│
-├── gym_env/  (one process per env instance)
-│     ShopEnv
-│       ├── Playwright Chromium → http://localhost:500N  (browser)
-│       ├── task.verify()       → GET /api/db-state      (state check)
-│       └── env.reset()         → POST /api/reset        (wipe + reseed)
-│
-└── Docker container "shop_N"  (port 500N)
-      Flask app
-      /app/shop.db → volume mount: _tmp/gym_N/shop.db
+task_runner.py  (session orchestrator)
+  |
+  ├── Flask subprocess  →  http://localhost:5299  (shop + SQLite)
+  |
+  ├── mcp_socket_server.py  (Unix-socket listener, hidden from Claude)
+  |     └── mcp_server.py  (FastMCP, stdio pipes)
+  |           └── Chromium  (Playwright, headless)
+  |
+  └── claude  (cwd = clean /tmp/shopgym_{id}/, no project files)
+        └── mcp_proxy.py  (opaque stdio↔socket bridge in Claude's cwd)
+              └── Unix socket ──→ mcp_socket_server.py
+
+_tmp/runs/{session_id}/  (all session artifacts)
+  trajectory.jsonl    one line per MCP tool call
+  trajectory.txt      human-readable step summary
+  screenshots/        PNG per screenshot tool call
+  trace.zip           Playwright trace (interactive replay)
+  video.webm          session recording
+  result.json         {passed, end_state, trajectory, ...}
 ```
 
-One container = one Flask process = one SQLite file. Each parallel env instance gets a unique port and a unique DB path. No shared mutable state between instances.
+**Isolation**: Claude's working directory is a clean `/tmp/shopgym_{id}/`
+containing only an opaque proxy script and a `.mcp.json` that references
+only `/tmp/` paths. Claude cannot read project source, task definitions,
+or verifier logic. See **[`CLAUDE_ISOLATION.md`](CLAUDE_ISOLATION.md)** for details.
 
-For the demo, Flask runs as lightweight subprocesses (no Docker) for fast local startup (~100 ms vs ~2–5 s for Docker).
-
-For environment API details, observation/action spaces, and reset flow timing, see **[`gym_env/README.md`](gym_env/README.md)**.
+One Flask process = one SQLite file. The agent can only interact with the
+shop through MCP browser tools — all Claude Code built-in tools are blocked
+by a PreToolUse hook registered in `.mcp.json`.
 
 ---
 
-## Demo
-
-Three tasks are implemented, each with a scripted oracle that achieves 100% success:
+## Tasks
 
 | Task | What the agent must do |
 |---|---|
 | `cancel_order` | Navigate to Orders → open the most recent order → cancel it |
-| `apply_coupon` | Find a specific SKU in Electronics → add qty 2 → apply coupon SAVE10 → checkout |
+| `apply_coupon` | Find SKU-E7421 in Electronics → add qty 2 → apply coupon SAVE10 → checkout |
 | `buy_cheapest` | Find the cheapest Electronics item → buy it → ship to 123 Main St, Springfield, IL |
 
-All oracle logic lives in **[`demo/oracles.py`](demo/oracles.py)**. Both runners (`run_one.py` and `parallel_demo.py`) import from it directly — no duplicated code.
-
-`run_one.py` injects a traced `_step` into the oracles module before running, so every action is logged with its resulting URL and reward — no per-oracle wrapper needed.
-
-See **[`demo/DEMO.md`](demo/DEMO.md)** for usage, expected output, and troubleshooting.
+Each task verifier reads backend state via `GET /api/db-state` — no HTML
+scraping, no LLM judge.
 
 ---
 
 ## Adding a new task
 
-See **[`gym_env/TASK.md`](gym_env/TASK.md)** for the full `AbstractTask` interface and step-by-step instructions. The short version:
-
-1. Write `tasks/your_task.py` (seed requirements + goal string + verifier)
+1. Create `tasks/your_task.py` — subclass `AbstractTask`, implement
+   `seed_requirements()`, `setup()`, `verify()`
 2. Export it from `tasks/__init__.py`
-3. Add a verifier unit test in `gym_env/tests/test_verifiers.py`
-4. Write `run_your_task_oracle(env, obs)` in `demo/oracles.py`
-5. Add one entry to `task_map` and `oracle_map` in both `demo/run_one.py` and `demo/parallel_demo.py`
-
-Or just ask Claude Code — it has a skill for this too.
+3. Add a verifier unit test in `tasks/tests/test_verifiers.py`
+4. Add it to the `_load_task()` registry in `agent_eval/task_runner.py`
 
 ---
 
-## Decisions
+## Viewing session artifacts
 
-### Decision 1 — Shop engine: build from scratch (Flask + sqlite3)
+```bash
+# Interactive Playwright trace replay
+playwright show-trace _tmp/runs/{session_id}/trace.zip
 
-**Options considered:** Fork `alankrantas/svelteapp-typescript-go` (Go + SvelteKit, archived), fork `shurco/mycart` (Go + Svelte), Vendure (TypeScript/NestJS/GraphQL), custom Flask app.
+# Human-readable step log
+cat _tmp/runs/{session_id}/trajectory.txt
 
-**Decision:** Custom Flask app.
+# Screenshots taken by the agent
+ls _tmp/runs/{session_id}/screenshots/
 
-**Reasoning:** Every candidate was missing the same set of testing-harness features: integer-seeded reset, `/api/db-state`, no-auth checkout, configurable DB path via env var. These must be added regardless of starting point. The Go options add a second language to a Python project. `shurco/mycart` requires days of auth stripping. Custom Flask gives full control over schema (verifiers are trivial), reset is a single transaction (~100ms), and one language across the whole project.
-
-**Tradeoffs accepted:** Less visual realism than a polished SPA — compensated by realistic page structure (navigation, pagination, multi-step checkout, coupon field, order list) that creates genuine agent difficulty.
-
----
-
-### Decision 2 — Database: SQLite, state as a file, host-mounted
-
-**Options considered:** PostgreSQL/MySQL in a separate container; SQLite inside the app container (ephemeral); SQLite on host, volume-mounted.
-
-**Decision:** SQLite on host, volume-mounted into the container.
-
-**Reasoning:** No extra container, no server process, no auth. The DB file is a self-contained artifact — it can be copied, archived, diffed with any SQLite tool, and inspected without a running process. Each parallel instance gets its own host path (`_tmp/gym_N/shop.db`), so there is no shared mutable state and no connection pooling. The container can crash and be replaced without touching the DB file.
-
-**Tradeoffs accepted:** SQLite doesn't scale to high write concurrency — not an issue because each instance has its own file and only one Flask worker writes at a time.
+# Full result JSON
+cat _tmp/runs/{session_id}/result.json
+```
 
 ---
 
-### Decision 3 — Verifier access: `/api/db-state`, not direct SQLite
+## Running verifier unit tests
 
-**Options considered:** Task verifiers open the SQLite file directly; task verifiers call `GET /api/db-state`.
+```bash
+# Setup (once)
+python -m venv tasks/.venv
+tasks/.venv/bin/pip install pytest requests
 
-**Decision:** Verifiers call `GET /api/db-state`.
+# Run
+tasks/.venv/bin/python -m pytest tasks/tests/test_verifiers.py -v
+```
 
-**Reasoning:** The shop owns its data model. A verifier that opens the SQLite file directly is coupled to the schema — if the shop changes a column name, every verifier breaks. Via `/api/db-state`, verifiers are coupled only to the JSON response shape, which is the shop's stable public contract. Task classes that only need `base_url` can work against any deployment and live in a separate repository.
-
-**Tradeoffs accepted:** Verifier requires the Flask container to be running — in practice never an issue, since the container must be running for the agent to operate anyway.
-
----
-
-### Decision 4 — Parallelism: one Docker container per instance
-
-**Options considered:** One container with multiple Flask workers; one subprocess per instance; one Docker container per instance.
-
-**Decision:** One Docker container per instance in production (`docker-compose.yml`). For the parallel demo script, Flask runs as subprocesses for speed.
-
-**Reasoning:** True isolation — one container crash doesn't affect others. Restart or reseed one instance without touching others. `docker-compose.yml` with 4 services is the deployable artifact. For the demo, subprocess startup is ~100ms vs ~2–5s for Docker, which is sufficient for demonstrating parallelism locally.
+No Docker or running Flask needed — `requests.get` is mocked.
 
 ---
 
-### Decision 5 — Checkout address validation: structured US format
+## Key design decisions
 
-**Options considered:** No validation; minimal (non-empty only); structured US validation (state dropdown, ZIP regex).
+### Shop engine: Flask + SQLite
+Custom Flask app gives full control over schema, reset is a single
+transaction (~100ms), and one language across the whole project.
+`/api/reset` wipes and re-seeds deterministically from a `SeedConfig`;
+`/api/db-state` returns the full DB as JSON for verifiers.
 
-**Decision:** Structured US validation — state is a `<select>` with all 50 states + DC, ZIP must match `^\d{5}$`.
+### No Gymnasium
+Gymnasium's `env.step(action)` assumes the agent is a function inside
+your process. Claude Code is an external process with its own reasoning
+loop. Dropping Gymnasium and building a task runner that hands the agent
+a browser via MCP is the right interface for this use case.
 
-**Reasoning:** The task specifies shipping to `123 Main St, Springfield, IL 62701`. Without structured validation, an agent that types "IL 62701" into the ZIP field could still get `reward=1.0`. Structured validation forces the agent to correctly interact with a dropdown and type a valid ZIP — realistic friction points on actual e-commerce sites. The verifier checks the stored `shipping_address` string, so if the form rejects malformed input, the agent cannot bypass it.
+### MCP as sole interface + isolation
+The agent can only interact with the world through MCP browser tools.
+All Claude Code built-in tools are blocked by a PreToolUse hook. The MCP
+server is hidden behind a Unix socket relay so Claude cannot read its
+source or discover project paths. See `CLAUDE_ISOLATION.md`.
 
-**Tradeoffs accepted:** US-only scope is a simplification; real shops support international addresses.
+### Explicit observation (no auto-DOM)
+`navigate`, `click`, `type_text`, and `scroll` return `"ok"`. The agent
+calls `get_dom` or `screenshot` explicitly when it needs to observe state.
+This keeps tool results small, gives the agent control over observation
+frequency, and makes the trajectory easier to read.
 
----
+### Playwright tracing as observability
+`playwright show-trace` gives an interactive step-by-step replay with
+DOM snapshots, screenshots, and network — better than anything you'd
+build yourself in this time budget.
 
-## Intentional scope limits
-
-These are deliberate cuts for this exercise, not architectural choices. A production gym would revisit each.
-
-| Topic | Restriction | Reason |
-|---|---|---|
-| **Geography** | US addresses only | Keeps address validation tractable; task spec gives a US address |
-| **Authentication** | None | Task spec says skip auth; adds complexity with zero benefit for agent training |
-| **Payment** | No payment step | Task spec says skip real payments |
-| **ID format** | UUID primary keys (not sequential integers) | Prevents agents from shortcutting tasks by sorting IDs instead of reading displayed dates |
-| **CSS/images** | None beyond structural HTML | Task spec: "unstyled HTML is completely fine" |
-| **Stock tracking** | No stock column; Add to Cart always succeeds | None of the three tasks involve stock |
-| **DOM in observation** | Raw HTML excluded; only `url`, `axtree`, `screenshot` | axtree covers the same semantic content at ~5× less data |
-| **RL training loop** | Scripted oracles and random policy only | Task spec: "a baseline policy is plenty" |
-| **Cross-browser** | Chromium only | Task spec: "one Chromium target is sufficient" |
-| **Timestamps** | All stored as UTC epoch integers; no `datetime.now()` anywhere | Avoids non-determinism from locale-aware wall-clock calls |
+### Trajectory validator: stub
+End-state verification is deterministic and implemented. Trajectory
+validation (LLM judge on recorded steps) is stubbed — the interface
+(`AbstractTrajectoryValidator`) is defined and the stub always passes.
+A real implementation would use an LLM judge with a task-specific rubric
+to catch shortcuts like direct URL construction that bypass the UI.

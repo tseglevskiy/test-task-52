@@ -13,7 +13,7 @@ Verifier checks:
 
 import requests
 
-from gym_env.tasks.base import AbstractTask
+from tasks.base import AbstractTask
 
 
 class ApplyCouponWithQuantityTask(AbstractTask):
@@ -25,7 +25,7 @@ class ApplyCouponWithQuantityTask(AbstractTask):
             "required_coupons":  [{"code": "SAVE10", "discount_pct": 10.0}],
         }
 
-    def setup(self, page, base_url: str) -> str:
+    def setup(self, base_url: str) -> str:
         state = requests.get(f"{base_url}/api/db-state").json()
 
         # Record all existing order IDs so verify() can detect new ones.
@@ -36,29 +36,36 @@ class ApplyCouponWithQuantityTask(AbstractTask):
             "and complete checkout."
         )
 
-    def verify(self, base_url: str, page) -> tuple[float, bool]:
+    def verify(self, base_url: str) -> dict:
         state = requests.get(f"{base_url}/api/db-state").json()
         new_orders = [o for o in state["orders"] if o["id"] not in self._pre_order_ids]
 
         if not new_orders:
-            return 0.0, False
+            return {
+                "passed": False,
+                "order_id": None,
+                "qty_ok": False,
+                "discount_ok": False,
+                "total_ok": False,
+            }
 
         order = new_orders[0]
         items = [i for i in state["order_items"] if i["order_id"] == order["id"]]
 
         # Find the SKU-E7421 line item.
         target_item = next((i for i in items if i["sku"] == "SKU-E7421"), None)
-        if target_item is None:
-            return 0.0, False
-
-        qty_ok = target_item["quantity"] == 2
+        qty_ok = target_item is not None and target_item["quantity"] == 2
 
         # Total should be: subtotal * (1 - 0.10).
-        # The order's discount_pct should be 10.0 and total should reflect it.
         discount_ok = abs(order.get("discount_pct", 0) - 10.0) < 0.01
         expected_total = order["subtotal"] * 0.9
         total_ok = abs(order["total"] - expected_total) < 0.02
 
-        if qty_ok and discount_ok and total_ok:
-            return 1.0, True
-        return 0.0, False
+        passed = qty_ok and discount_ok and total_ok
+        return {
+            "passed": passed,
+            "order_id": order["id"],
+            "qty_ok": qty_ok,
+            "discount_ok": discount_ok,
+            "total_ok": total_ok,
+        }

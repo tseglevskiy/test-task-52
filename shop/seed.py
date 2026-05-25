@@ -55,7 +55,7 @@ class RequiredProduct:
 @dataclass
 class RequiredCoupon:
     """A coupon that MUST exist in the DB with this exact code and discount."""
-    code: str           # e.g. "SAVE10"
+    code: str           # e.g. "DISCOUNT10"
     discount_pct: float # e.g. 10.0  (means 10%)
     active: bool = True
 
@@ -411,7 +411,7 @@ def _parse_required_product(s: str) -> RequiredProduct:
 
 
 def _parse_required_coupon(s: str) -> RequiredCoupon:
-    """Parse JSON string like '{"code": "SAVE10", "discount_pct": 10.0}'."""
+    """Parse JSON string like '{"code": "DISCOUNT10", "discount_pct": 10.0}'."""
     data = json.loads(s)
     return RequiredCoupon(
         code=data["code"],

@@ -10,7 +10,7 @@ Verifier checks:
 
 import requests
 
-from gym_env.tasks.base import AbstractTask
+from tasks.base import AbstractTask
 
 
 class CancelRecentOrderTask(AbstractTask):
@@ -22,7 +22,7 @@ class CancelRecentOrderTask(AbstractTask):
             "required_orders": [{"status": "placed"}],
         }
 
-    def setup(self, page, base_url: str) -> str:
+    def setup(self, base_url: str) -> str:
         state = requests.get(f"{base_url}/api/db-state").json()
         placed = [o for o in state["orders"] if o["status"] == "placed"]
 
@@ -36,12 +36,14 @@ class CancelRecentOrderTask(AbstractTask):
 
         return "Cancel the most recent existing order in the account."
 
-    def verify(self, base_url: str, page) -> tuple[float, bool]:
+    def verify(self, base_url: str) -> dict:
         state = requests.get(f"{base_url}/api/db-state").json()
         order = next(
             (o for o in state["orders"] if o["id"] == self._target_order_id), None
         )
 
-        if order and order["status"] == "cancelled":
-            return 1.0, True
-        return 0.0, False
+        if order is None:
+            return {"passed": False, "order_id": self._target_order_id, "status": None}
+
+        passed = order["status"] == "cancelled"
+        return {"passed": passed, "order_id": order["id"], "status": order["status"]}

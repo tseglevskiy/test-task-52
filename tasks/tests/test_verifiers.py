@@ -1,14 +1,14 @@
 """
 Unit tests for task verifiers.
-Run with: gym_env/.venv/bin/python -m pytest gym_env/tests/test_verifiers.py -v
+Run with: python -m pytest tasks/tests/test_verifiers.py -v
 
 No Docker or HTTP needed — requests.get is mocked.
 
 Each test:
 1. Instantiates the task and sets its episode state directly.
 2. Patches requests.get to return a fake db-state dict.
-3. Calls task.verify() and asserts (1.0, True) for the success state.
-4. Also tests the negative path: asserts (0.0, False) for the incomplete state.
+3. Calls task.verify() and asserts result["passed"] is True for the success state.
+4. Also tests the negative path: asserts result["passed"] is False for the incomplete state.
 
 The fake state dicts document what a successful DB state looks like for each task.
 """
@@ -49,9 +49,9 @@ def test_cancel_order_verifier():
         "coupons": [],
     }
     with patch("requests.get", _mock_get(success_state)):
-        reward, terminated = task.verify("http://localhost:5001", None)
-    assert reward == 1.0
-    assert terminated is True
+        result = task.verify("http://localhost:5001")
+    assert result["passed"] is True
+    assert result["status"] == "cancelled"
 
     # --- Negative: order still placed ---
     pending_state = {
@@ -63,9 +63,9 @@ def test_cancel_order_verifier():
         "coupons": [],
     }
     with patch("requests.get", _mock_get(pending_state)):
-        reward, terminated = task.verify("http://localhost:5001", None)
-    assert reward == 0.0
-    assert terminated is False
+        result = task.verify("http://localhost:5001")
+    assert result["passed"] is False
+    assert result["status"] == "placed"
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +111,10 @@ def test_buy_cheapest_verifier():
         "coupons": [],
     }
     with patch("requests.get", _mock_get(success_state)):
-        reward, terminated = task.verify("http://localhost:5001", None)
-    assert reward == 1.0
-    assert terminated is True
+        result = task.verify("http://localhost:5001")
+    assert result["passed"] is True
+    assert result["price_ok"] is True
+    assert result["address_ok"] is True
 
     # --- Negative: item is from wrong category (Clothing, not Electronics) ---
     wrong_category_state = {
@@ -147,9 +148,9 @@ def test_buy_cheapest_verifier():
     task2._pre_order_ids = set()  # no pre-existing orders
     task2._min_price = 29.99
     with patch("requests.get", _mock_get(wrong_category_state)):
-        reward, terminated = task2.verify("http://localhost:5001", None)
-    assert reward == 0.0
-    assert terminated is False
+        result = task2.verify("http://localhost:5001")
+    assert result["passed"] is False
+    assert result["price_ok"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +197,11 @@ def test_apply_coupon_verifier():
         ],
     }
     with patch("requests.get", _mock_get(success_state)):
-        reward, terminated = task.verify("http://localhost:5001", None)
-    assert reward == 1.0
-    assert terminated is True
+        result = task.verify("http://localhost:5001")
+    assert result["passed"] is True
+    assert result["qty_ok"] is True
+    assert result["discount_ok"] is True
+    assert result["total_ok"] is True
 
     # --- Negative: correct SKU but quantity=1, not 2 ---
     wrong_qty_state = {
@@ -230,6 +233,6 @@ def test_apply_coupon_verifier():
     task2 = ApplyCouponWithQuantityTask()
     task2._pre_order_ids = set()
     with patch("requests.get", _mock_get(wrong_qty_state)):
-        reward, terminated = task2.verify("http://localhost:5001", None)
-    assert reward == 0.0
-    assert terminated is False
+        result = task2.verify("http://localhost:5001")
+    assert result["passed"] is False
+    assert result["qty_ok"] is False
