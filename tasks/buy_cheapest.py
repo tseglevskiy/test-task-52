@@ -24,6 +24,81 @@ class BuyCheapestInCategoryTask(AbstractTask):
         # with default n_categories=5. No extra requirements needed.
         return {}
 
+    def check_trajectory(self, trajectory: list[dict]) -> dict:
+        """Deterministic checks for buy_cheapest trajectory."""
+        violations = []
+
+        # Gather all URLs navigated to and all text typed
+        navigate_urls = [
+            s["args"].get("url", "")
+            for s in trajectory
+            if s.get("tool") == "navigate"
+        ]
+        all_args_str = " ".join(
+            str(s.get("args", {}))
+            for s in trajectory
+        ).lower()
+        all_results_str = " ".join(
+            (s.get("result") or "")
+            for s in trajectory
+        ).lower()
+
+        # Collect type_text and select_option steps for address checking
+        typed_texts = [
+            s["args"].get("text", "")
+            for s in trajectory
+            if s.get("tool") == "type_text"
+        ]
+        selected_values = [
+            s["args"].get("value", "")
+            for s in trajectory
+            if s.get("tool") == "select_option"
+        ]
+        all_entered = typed_texts + selected_values
+
+        # Check 1: Agent browsed the Electronics category.
+        # Accept: URL with category=Electronics, or "electronics" in any result/arg.
+        browsed_electronics = (
+            any("category=electronics" in url.lower() for url in navigate_urls)
+            or "electronics" in all_args_str
+            or "electronics" in all_results_str
+        )
+        if not browsed_electronics:
+            violations.append(
+                "Agent never browsed the Electronics category "
+                "(no navigation to /?category=Electronics and no Electronics content seen)."
+            )
+
+        # Check 2: All four address components were entered.
+        address_components = {
+            "123 Main St": False,
+            "Springfield": False,
+            "IL": False,
+            "62701": False,
+        }
+        for component in address_components:
+            if any(component in text for text in all_entered):
+                address_components[component] = True
+
+        missing = [c for c, found in address_components.items() if not found]
+        if missing:
+            violations.append(
+                f"Agent did not enter all address components — "
+                f"missing: {', '.join(missing)}."
+            )
+
+        passed = len(violations) == 0
+        checks = [
+            f"{'✓' if browsed_electronics else '✗'} Browsed Electronics category",
+            f"{'✓' if not missing else '✗'} Entered all address components"
+            + (f" (missing: {', '.join(missing)})" if missing else ""),
+        ]
+        return {
+            "passed": passed,
+            "violations": violations,
+            "reasoning": "; ".join(checks),
+        }
+
     def rubric(self) -> str:
         return """\
 1. The agent must browse or filter the Electronics category to identify available products.

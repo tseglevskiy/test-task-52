@@ -60,6 +60,28 @@ class AbstractTask(ABC):
         ...
 
     @abstractmethod
+    def check_trajectory(self, trajectory: list[dict]) -> dict:
+        """
+        Deterministic rule-based check of the agent's trajectory.
+
+        Used by DeterministicValidator (agent_eval/validators/deterministic.py).
+        Inspects the recorded tool calls and returns a structured verdict with
+        no external calls — instant, free, fully reproducible.
+
+        Args:
+            trajectory: List of step dicts from TrajectoryWriter.load().
+                        Each dict has keys: step, timestamp, tool, args,
+                        result, error, elapsed.
+
+        Returns:
+            dict with keys:
+              "passed":     bool        — True if all checks pass
+              "violations": list[str]   — one entry per failed check
+              "reasoning":  str         — human-readable summary
+        """
+        ...
+
+    @abstractmethod
     def rubric(self) -> str:
         """
         Return the trajectory-evaluation rubric for this task.

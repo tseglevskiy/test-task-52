@@ -762,14 +762,21 @@ async def run_session(
 
         # --- 6. Trajectory validation ---
         from agent_eval.trajectory import TrajectoryWriter
+        from agent_eval.validators.deterministic import DeterministicValidator
+        from agent_eval.validators.llm_judge import LLMJudgeValidator
 
         writer = TrajectoryWriter(runs_dir)
         trajectory = writer.load()
 
-        from agent_eval.validators.llm_judge import LLMJudgeValidator
-        validator = LLMJudgeValidator()
-        traj_result = validator.validate(trajectory, task_name, goal)
-        print(f"[task_runner] trajectory: {traj_result}", flush=True)
+        # Deterministic validator: instant, rule-based, no API calls
+        det_validator = DeterministicValidator()
+        det_result = det_validator.validate(trajectory, task_name, goal)
+        print(f"[task_runner] trajectory (deterministic): {det_result}", flush=True)
+
+        # LLM judge: slower, catches subtler behavioral issues
+        llm_validator = LLMJudgeValidator()
+        llm_result = llm_validator.validate(trajectory, task_name, goal)
+        print(f"[task_runner] trajectory (llm_judge): {llm_result}", flush=True)
 
         # --- 7. Assemble and write result ---
         ended_at = time.time()
@@ -782,8 +789,9 @@ async def run_session(
             "duration_s": round(ended_at - started_at, 1),
             "exit_code": exit_code,
             "end_state": end_state,
-            "trajectory": traj_result,
-            "passed": end_state["passed"] and traj_result["passed"],
+            "trajectory_deterministic": det_result,
+            "trajectory_llm": llm_result,
+            "passed": end_state["passed"] and det_result["passed"] and llm_result["passed"],
         }
 
         result_path = session_dir / "result.json"
@@ -820,7 +828,8 @@ def _print_summary(result: dict, session_dir: Path) -> None:
     print(f"  duration:   {result['duration_s']}s", flush=True)
     print(f"  exit_code:  {result['exit_code']}", flush=True)
     print(f"  end_state:  {result['end_state']}", flush=True)
-    print(f"  trajectory: {result['trajectory']}", flush=True)
+    print(f"  traj (det): {result['trajectory_deterministic']}", flush=True)
+    print(f"  traj (llm): {result['trajectory_llm']}", flush=True)
     print(f"\n  Artifacts in:  {session_dir}", flush=True)
     print(f"    flask.log         — web server request log", flush=True)
     print(f"    shop_seed.db      — DB snapshot before agent ran", flush=True)

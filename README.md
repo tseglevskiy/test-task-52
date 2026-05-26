@@ -50,10 +50,11 @@ gym/
 │   ├── SEEDING.md             # Seeder design and determinism guarantees
 │   └── DOCKER.md              # How to build, run, and tear down Docker instances
 ├── tasks/                     # Concrete task implementations + verifier tests
-│   ├── base.py                # AbstractTask interface
+│   ├── base.py                # AbstractTask interface (seed_requirements, setup, check_trajectory, rubric, verify)
 │   ├── cancel_order.py        # CancelRecentOrderTask
 │   ├── apply_coupon.py        # ApplyCouponWithQuantityTask
 │   ├── buy_cheapest.py        # BuyCheapestInCategoryTask
+│   ├── README.md              # How to write a new task (start here)
 │   └── tests/
 │       └── test_verifiers.py  # Unit tests for task verifiers (no Docker needed)
 ├── agent_eval/                # Agent evaluation harness
@@ -64,7 +65,9 @@ gym/
 │   ├── trajectory.py          # TrajectoryWriter: JSONL + human-readable .txt
 │   ├── validators/
 │   │   ├── base.py            # AbstractTrajectoryValidator interface
-│   │   └── stub.py            # StubValidator — always passes (placeholder)
+│   │   ├── deterministic.py   # DeterministicValidator — rule-based, instant, no API
+│   │   ├── llm_judge.py       # LLMJudgeValidator — OpenRouter LLM judge
+│   │   └── stub.py            # StubValidator — always passes (kept for offline testing)
 │   ├── requirements.txt
 │   └── README.md              # Full usage docs, artifact layout, how to add a validator
 ├── demo/                      # Ready-to-run demo scripts (start here)
@@ -75,8 +78,7 @@ gym/
 ├── docker-compose.yml         # 4 shop instances on ports 5001-5004
 ├── TASK.md                    # Original task specification
 ├── TASK2.md                   # TASK2 specification (this implementation)
-├── CLAUDE_ISOLATION.md        # Isolation architecture: why and how Claude is sandboxed
-└── CLAUDE_PLUMBING.md         # Original wiring design notes
+└── CLAUDE_ISOLATION.md        # Isolation architecture: why and how Claude is sandboxed
 ```
 
 ---
@@ -97,12 +99,17 @@ task_runner.py  (session orchestrator)
               └── Unix socket ──→ mcp_socket_server.py
 
 _tmp/runs/{session_id}/  (all session artifacts)
+  shop_seed.db        SQLite snapshot before agent ran
+  shop.db             SQLite snapshot after agent ran
+  db_state_seed.json  full DB state as JSON before agent ran
+  db_state_final.json full DB state as JSON after agent ran
+  shop.jsonl          shop event log (add-to-cart, checkout, cancel, etc.)
   trajectory.jsonl    one line per MCP tool call
   trajectory.txt      human-readable step summary
   screenshots/        PNG per screenshot tool call
   trace.zip           Playwright trace (interactive replay)
   video.webm          session recording
-  result.json         {passed, end_state, trajectory, ...}
+  result.json         {passed, end_state, trajectory_deterministic, trajectory_llm, ...}
 ```
 
 **Isolation**: Claude's working directory is a clean `/tmp/shopgym_{id}/`
@@ -124,18 +131,23 @@ by a PreToolUse hook registered in `.mcp.json`.
 | `apply_coupon` | Find SKU-E7421 in Electronics → add qty 2 → apply coupon SAVE10 → checkout |
 | `buy_cheapest` | Find the cheapest Electronics item → buy it → ship to 123 Main St, Springfield, IL |
 
-Each task verifier reads backend state via `GET /api/db-state` — no HTML
-scraping, no LLM judge.
+Each task is validated three ways: end-state DB check, deterministic
+trajectory rules, and an LLM judge — all must pass for `result.passed = true`.
+
+See **[`tasks/README.md`](tasks/README.md)** for the full task authoring guide.
 
 ---
 
 ## Adding a new task
 
-1. Create `tasks/your_task.py` — subclass `AbstractTask`, implement
-   `seed_requirements()`, `setup()`, `verify()`
-2. Export it from `tasks/__init__.py`
-3. Add a verifier unit test in `tasks/tests/test_verifiers.py`
-4. Add it to the `_load_task()` registry in `agent_eval/task_runner.py`
+1. Create `tasks/your_task.py` — subclass `AbstractTask`, implement all five methods:
+   `seed_requirements()`, `setup()`, `check_trajectory()`, `rubric()`, `verify()`
+2. Register in `_load_task()` in `agent_eval/task_runner.py`
+3. Register in `_load_task_instance()` in `agent_eval/validators/deterministic.py`
+4. Register in `_get_rubric()` in `agent_eval/validators/llm_judge.py`
+5. Add a verifier unit test in `tasks/tests/test_verifiers.py`
+
+Full step-by-step guide with code examples: **[`tasks/README.md`](tasks/README.md)**
 
 ---
 
@@ -203,9 +215,19 @@ frequency, and makes the trajectory easier to read.
 DOM snapshots, screenshots, and network — better than anything you'd
 build yourself in this time budget.
 
-### Trajectory validator: stub
-End-state verification is deterministic and implemented. Trajectory
-validation (LLM judge on recorded steps) is stubbed — the interface
-(`AbstractTrajectoryValidator`) is defined and the stub always passes.
-A real implementation would use an LLM judge with a task-specific rubric
-to catch shortcuts like direct URL construction that bypass the UI.
+### Three-layer validation
+Every session runs three independent validators:
+
+1. **End-state verifier** (`task.verify()`) — checks the final DB state via
+   `GET /api/db-state`. Deterministic, instant, task-specific.
+
+2. **Deterministic trajectory validator** (`DeterministicValidator`) — rule-based
+   checks on the recorded tool calls. Defined in each task file as
+   `check_trajectory()`. Instant, free, fully reproducible. Catches clear-cut
+   violations like navigating directly to a cancel URL instead of using the UI.
+
+3. **LLM judge** (`LLMJudgeValidator`) — sends the trajectory to an LLM via
+   OpenRouter with a task-specific rubric (defined in `task.rubric()`). Catches
+   subtler behavioral issues. Requires `OPENROUTER_API_KEY` in `.env`.
+
+All three must pass for `result["passed"]` to be `true`.

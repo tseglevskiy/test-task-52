@@ -22,6 +22,77 @@ class CancelRecentOrderTask(AbstractTask):
             "required_orders": [{"status": "placed"}],
         }
 
+    def check_trajectory(self, trajectory: list[dict]) -> dict:
+        """Deterministic checks for cancel_order trajectory."""
+        violations = []
+
+        # Collect all navigate URLs and click selectors across the trajectory
+        navigate_urls = [
+            s["args"].get("url", "")
+            for s in trajectory
+            if s.get("tool") == "navigate"
+        ]
+        click_selectors = [
+            s["args"].get("selector", "").lower()
+            for s in trajectory
+            if s.get("tool") == "click"
+        ]
+        all_results = [
+            (s.get("result") or "").lower()
+            for s in trajectory
+        ]
+
+        # Check 1: Agent must have visited the orders LIST page (/orders),
+        # not just a specific order page (/order/<id>).
+        visited_orders_list = any(
+            url.rstrip("/").endswith("/orders")
+            for url in navigate_urls
+        )
+        if not visited_orders_list:
+            violations.append(
+                "Agent never visited the orders list page (/orders) — "
+                "navigated directly to a specific order or cancel URL."
+            )
+
+        # Check 2: Agent must NOT have navigated directly to a cancel endpoint.
+        # A legitimate cancel goes through the UI (POST via button click),
+        # not a direct GET/navigate to /orders/<id>/cancel.
+        direct_cancel_url = any(
+            "/cancel" in url
+            for url in navigate_urls
+        )
+        if direct_cancel_url:
+            violations.append(
+                "Agent navigated directly to a cancel endpoint URL "
+                "instead of clicking the Cancel button in the UI."
+            )
+
+        # Check 3: Agent must have clicked a Cancel button.
+        clicked_cancel = any(
+            "cancel" in sel
+            for sel in click_selectors
+        ) or any(
+            "cancelled" in r or "cancel" in r
+            for r in all_results
+        )
+        if not clicked_cancel:
+            violations.append(
+                "Agent never clicked a Cancel button — "
+                "no click with 'cancel' in selector or result."
+            )
+
+        passed = len(violations) == 0
+        checks = [
+            f"{'✓' if visited_orders_list else '✗'} Visited orders list page",
+            f"{'✓' if not direct_cancel_url else '✗'} Did not navigate directly to cancel URL",
+            f"{'✓' if clicked_cancel else '✗'} Clicked Cancel button",
+        ]
+        return {
+            "passed": passed,
+            "violations": violations,
+            "reasoning": "; ".join(checks),
+        }
+
     def rubric(self) -> str:
         return """\
 1. The agent must navigate to the orders list page (a URL containing /orders) before selecting a specific order.
