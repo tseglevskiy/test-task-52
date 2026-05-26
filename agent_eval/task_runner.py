@@ -324,6 +324,11 @@ def _setup_claude_workdir(
     """
     import ast
 
+    # Use system Python for the proxy and hook — both scripts use only stdlib,
+    # so no venv is needed.  This keeps all paths in .mcp.json inside /tmp/ or
+    # /usr/bin/, with no project directory visible to Claude.
+    proxy_python = shutil.which("python3") or "/usr/bin/python3"
+
     workdir = Path(f"/tmp/shopgym_{session_id}")
     workdir.mkdir(parents=True, exist_ok=True)
 
@@ -350,11 +355,17 @@ def _setup_claude_workdir(
     proxy_copy = workdir / "server.py"
     proxy_copy.write_text(proxy_src)
 
-    # Write the opaque .mcp.json — references only local files, no project paths.
+    # Copy the hook script into the workdir so its path is also in /tmp/.
+    # The original in the session artifacts dir is kept for the audit record.
+    hook_copy = workdir / "hook.py"
+    shutil.copy2(hook_path, hook_copy)
+
+    # Write the opaque .mcp.json — all paths are in /tmp/ or /usr/bin/;
+    # no project directory is visible to Claude.
     config = {
         "mcpServers": {
             "browser": {
-                "command": _PYTHON_EXE,
+                "command": proxy_python,
                 "args": [str(proxy_copy), sock_path],
             }
         },
@@ -365,7 +376,7 @@ def _setup_claude_workdir(
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"{_PYTHON_EXE} {hook_path}",
+                            "command": f"{proxy_python} {hook_copy}",
                         }
                     ],
                 }

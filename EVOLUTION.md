@@ -124,8 +124,20 @@ Claude's **only interface** to the world is 8 MCP browser tools:
 | `mcp__browser__get_dom` | Get the current page DOM |
 | `mcp__browser__get_url` | Get the current URL |
 
-All other Claude tools (Bash, file I/O, web search) are blocked by a
-`PreToolUse` hook that denies anything not prefixed `mcp__browser__`.
+All other Claude tools (Bash, file I/O, web search) are blocked by two
+independent enforcement layers:
+
+1. **`--allowedTools` CLI flag** — passed to the `claude` process at launch,
+   whitelisting exactly the 8 `mcp__browser__*` tools at the Claude process
+   level before any hook runs.
+2. **`PreToolUse` hook** — `hook.py` is copied into Claude's clean workdir
+   (`/tmp/shopgym_{id}/hook.py`) and referenced in `.mcp.json`. It runs before
+   every tool call and returns `{"decision": "deny"}` for anything not prefixed
+   `mcp__browser__`.
+
+Both the hook path and the Python interpreter (`/usr/bin/python3`, resolved via
+`shutil.which`) are outside the project directory. Claude's `.mcp.json` contains
+only `/tmp/` and `/usr/bin/` paths — no project paths at all.
 
 ---
 
@@ -232,14 +244,15 @@ V2 runs Claude in a clean temporary directory with no project files:
 
 ```
 /tmp/shopgym_{session_id}/
-  .mcp.json    ← opaque MCP config (no project paths)
+  .mcp.json    ← opaque MCP config (all paths in /tmp/ or /usr/bin/)
   server.py    ← copy of mcp_proxy.py, module docstring stripped
+  hook.py      ← copy of pre_tool_use.py (allow/deny logic only)
 ```
 
 The real MCP server (`agent_eval/mcp_server.py`) is hidden behind a Unix
-socket relay. Claude's `.mcp.json` references only files in `/tmp/` — it
-cannot discover the project directory, read source code, or find task
-definitions.
+socket relay. Claude's `.mcp.json` uses `/usr/bin/python3` as the interpreter
+and references only files in `/tmp/` — it cannot discover the project
+directory, read source code, or find task definitions.
 
 This matters because Claude, when it encounters errors, falls back to reading
 files. Without isolation, it would read `README.md`, `TASK.md`, task verifier
