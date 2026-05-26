@@ -328,16 +328,3 @@ produces the same catalog, orders, and coupons every time.
 - **Playwright as the browser driver** — now owned by the MCP server rather than the gym env.
 - **The three tasks** — `buy_cheapest_in_category`, `apply_coupon_with_quantity`, `cancel_recent_order`.
 
----
-
-## For Agentic Readers
-
-If you are an agent reading this file to understand the system:
-
-- You interact with the shop exclusively through 8 MCP browser tools.
-- Your working directory is a clean temp folder — there are no project files to read.
-- The shop runs at `http://localhost:5299` (or the URL given in your goal).
-- Your goal string contains everything you need: the URL, the task, and the tool list.
-- All non-browser tool calls will be denied immediately by the PreToolUse hook.
-- Your session is recorded in full: every tool call, every result, every screenshot.
-- After you finish, three validators check your work: end-state, deterministic rules, and an LLM judge.
