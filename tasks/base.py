@@ -60,6 +60,21 @@ class AbstractTask(ABC):
         ...
 
     @abstractmethod
+    def rubric(self) -> str:
+        """
+        Return the trajectory-evaluation rubric for this task.
+
+        Used by the LLM judge (agent_eval/validators/llm_judge.py) to assess
+        whether the agent's behavior was acceptable — independent of the
+        end-state verifier.
+
+        Returns:
+            A multi-line string listing the criteria the agent must satisfy.
+            Each criterion should be a numbered item.
+        """
+        ...
+
+    @abstractmethod
     def verify(self, base_url: str) -> dict:
         """
         Called after the agent session ends. Check if the task was completed.

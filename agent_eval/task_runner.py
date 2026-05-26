@@ -148,14 +148,18 @@ def _start_flask_subprocess(db_path: Path, port: int, log_path: Path) -> subproc
     flask_cmd = (
         "import os, sys; sys.path.insert(0, os.getcwd()); "
         "from app import create_app; "
-        f"create_app(os.environ['DATABASE_PATH']).run("
+        f"create_app(os.environ['DATABASE_PATH'], os.environ.get('LOG_PATH')).run("
         f"host='0.0.0.0', port={port}, debug=False, use_reloader=False)"
     )
     log_fh = open(log_path, "wb")
     proc = subprocess.Popen(
         [python_exe, "-c", flask_cmd],
         cwd=ROOT / "shop",
-        env={**os.environ, "DATABASE_PATH": str(db_path)},
+        env={
+            **os.environ,
+            "DATABASE_PATH": str(db_path),
+            "LOG_PATH": str(db_path.with_suffix(".jsonl")),
+        },
         stdout=log_fh,
         stderr=log_fh,
     )
@@ -682,6 +686,13 @@ async def run_session(
         shutil.copy2(str(db_path), str(seed_snapshot))
         print(f"[task_runner] Seed snapshot: {seed_snapshot}", flush=True)
 
+        # Save the full DB state as JSON (same data the task verifiers use).
+        # This snapshot is taken after seeding but before the agent runs.
+        db_state_seed = requests.get(f"{base_url}/api/db-state", timeout=10).json()
+        with open(session_dir / "db_state_seed.json", "w") as f:
+            json.dump(db_state_seed, f, indent=2)
+        print(f"[task_runner] DB state seed snapshot: {session_dir / 'db_state_seed.json'}", flush=True)
+
         goal = task.setup(base_url)
         print(f"[task_runner] goal: {goal}", flush=True)
 
@@ -743,13 +754,20 @@ async def run_session(
         end_state = task.verify(base_url)
         print(f"[task_runner] end_state: {end_state}", flush=True)
 
-        # --- 6. Trajectory validation (stub) ---
-        from agent_eval.validators.stub import StubValidator
+        # Save the full DB state as JSON after the agent ran.
+        db_state_final = requests.get(f"{base_url}/api/db-state", timeout=10).json()
+        with open(session_dir / "db_state_final.json", "w") as f:
+            json.dump(db_state_final, f, indent=2)
+        print(f"[task_runner] DB state final snapshot: {session_dir / 'db_state_final.json'}", flush=True)
+
+        # --- 6. Trajectory validation ---
         from agent_eval.trajectory import TrajectoryWriter
 
         writer = TrajectoryWriter(runs_dir)
         trajectory = writer.load()
-        validator = StubValidator()
+
+        from agent_eval.validators.llm_judge import LLMJudgeValidator
+        validator = LLMJudgeValidator()
         traj_result = validator.validate(trajectory, task_name, goal)
         print(f"[task_runner] trajectory: {traj_result}", flush=True)
 
@@ -807,6 +825,9 @@ def _print_summary(result: dict, session_dir: Path) -> None:
     print(f"    flask.log         — web server request log", flush=True)
     print(f"    shop_seed.db      — DB snapshot before agent ran", flush=True)
     print(f"    shop.db           — DB snapshot after agent ran", flush=True)
+    print(f"    db_state_seed.json — full DB state as JSON before agent ran", flush=True)
+    print(f"    db_state_final.json — full DB state as JSON after agent ran", flush=True)
+    print(f"    shop.jsonl        — shop event log (add-to-cart, checkout, cancel, etc.)", flush=True)
     print(f"    trajectory.jsonl  — machine-readable tool call log", flush=True)
     print(f"    trajectory.txt    — human-readable summary", flush=True)
     print(f"    screenshots/      — PNG per screenshot call", flush=True)

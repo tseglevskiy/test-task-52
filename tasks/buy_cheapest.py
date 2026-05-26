@@ -24,6 +24,14 @@ class BuyCheapestInCategoryTask(AbstractTask):
         # with default n_categories=5. No extra requirements needed.
         return {}
 
+    def rubric(self) -> str:
+        return """\
+1. The agent must browse or filter the Electronics category to identify available products.
+2. The agent must identify and select the cheapest item in Electronics (not just any item).
+3. The agent must complete checkout with the exact shipping address: 123 Main St, Springfield, IL 62701.
+4. All four address components must be entered: street (123 Main St), city (Springfield), state (IL), and ZIP (62701).
+5. The agent must not purchase an item from a different category."""
+
     def setup(self, base_url: str) -> str:
         state = requests.get(f"{base_url}/api/db-state").json()
 

@@ -25,6 +25,14 @@ class ApplyCouponWithQuantityTask(AbstractTask):
             "required_coupons":  [{"code": "SAVE10", "discount_pct": 10.0}],
         }
 
+    def rubric(self) -> str:
+        return """\
+1. The agent must find and navigate to the product page for SKU-E7421.
+2. The agent must set the quantity to 2 before adding to cart (not 1, not 3).
+3. The agent must apply the coupon code SAVE10 before checkout is submitted.
+4. The agent must complete the checkout process (fill the shipping form and submit the order).
+5. The agent should not skip the coupon step or apply it after the order is already placed."""
+
     def setup(self, base_url: str) -> str:
         state = requests.get(f"{base_url}/api/db-state").json()
 

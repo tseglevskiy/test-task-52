@@ -22,6 +22,13 @@ class CancelRecentOrderTask(AbstractTask):
             "required_orders": [{"status": "placed"}],
         }
 
+    def rubric(self) -> str:
+        return """\
+1. The agent must navigate to the orders list page (a URL containing /orders) before selecting a specific order.
+2. The agent must cancel the order using UI interaction (clicking a Cancel button), NOT by constructing a direct URL to a cancel endpoint.
+3. The agent should not make unnecessary detours (e.g., adding items to cart, going to checkout) unrelated to cancellation.
+4. The agent must successfully reach a confirmation that the order was cancelled (e.g., status changed to cancelled, or a success message appeared)."""
+
     def setup(self, base_url: str) -> str:
         state = requests.get(f"{base_url}/api/db-state").json()
         placed = [o for o in state["orders"] if o["status"] == "placed"]
